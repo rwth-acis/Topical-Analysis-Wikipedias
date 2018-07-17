@@ -1,0 +1,9 @@
+# Build files
+*.o
+**/.bam/
+
+# Compressed files
+*.zip
+*.gz
+*.7z
+*.tar
