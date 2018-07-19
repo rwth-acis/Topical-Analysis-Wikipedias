@@ -39,7 +39,7 @@ int ParsingUtil::findPattern(FILE *ipFile, const string stopStr)
     return -1;
 }
 
-bool ParsingUtil::findPattern(DynamicBuffer* buffer, const string stopStr)
+bool ParsingUtil::searchPattern(DynamicBuffer* buffer, const string stopStr)
 {
     char c;
     size_t pos = 0;
@@ -68,6 +68,46 @@ char ParsingUtil::findPattern(FILE *ipFile, const vector<char> stopChars)
         for (size_t i = 0; i < stopChars.size(); i++)
             if (c == stopChars[i])
                 return c;
+    }
+
+    return 0;
+}
+
+size_t ParsingUtil::findPattern(DynamicBuffer* buffer, const string stopStr)
+{
+    char c;
+    size_t state = 0;
+
+    for (size_t i = 0; i < buffer->length(); i++)
+    {
+        c = buffer->read(i);
+        if (c == (char) toupper(stopStr[state]) || c == (char) tolower(stopStr[state]))
+            state++;
+        else
+            state = 0;
+
+        if (state >= stopStr.size())
+            return i;
+    }
+
+    return 0;
+}
+
+size_t ParsingUtil::findPattern(DynamicBuffer* buffer, size_t offset, const std::string stopStr)
+{
+    char c;
+    size_t state = 0;
+
+    for (size_t i = offset; i < buffer->length(); i++)
+    {
+        c = buffer->read(i);
+        if (c == (char) toupper(stopStr[state]) || c == (char) tolower(stopStr[state]))
+            state++;
+        else
+            state = 0;
+
+        if (state >= stopStr.size())
+            return i;
     }
 
     return 0;
@@ -125,6 +165,46 @@ int ParsingUtil::findPattern(FILE *ipFile, const string stopStr, DynamicBuffer* 
                 LoggingUtil::warning("Buffer had to be extended for content:" + backlog->print(), logfile);
 
             return backlog->length();
+        }
+    }
+
+    return 1;
+}
+
+int ParsingUtil::findPattern(FILE *ipFile, const string stopStr, DynamicBuffer* backlog, char flushChar)
+{
+    backlog->flush();;
+    char c;
+    size_t state = 0;
+    size_t initSize = backlog->size();
+    int endSize = 0;
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == flushChar)
+        {
+            backlog->flush();
+            continue;
+        }
+        if ((endSize = backlog->write(c)) < 0)
+        {
+            // print error to logfile
+            if (logging)
+                LoggingUtil::error("Buffer exceeded maximum size! Stopped parsing\n" + backlog->print(), logfile);
+            return -1;
+        }
+
+        if (c == (char) toupper(stopStr[state]) || c == (char) tolower(stopStr[state]))
+            state++;
+        else
+            state = 0;
+
+        // print warning if title is larger than expected
+        if (state >= stopStr.size())
+        {
+            if (endSize > initSize && logging)
+                LoggingUtil::warning("Buffer had to be extended for content:" + backlog->print(), logfile);
+
+            return 0;
         }
     }
 
@@ -281,6 +361,33 @@ int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const string
     return 0;
 }
 
+int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const char stopChar)
+{
+    char c;
+    size_t initSize = buffer->size();
+    int endSize = 0;
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == stopChar)
+        {
+            // print warning if buffer had to be extended
+            if (endSize > initSize && logging)
+                LoggingUtil::warning("Buffer had to be extended for content: " + buffer->print(), logfile);
+            return 1;
+        }
+
+        if ((endSize = buffer->write(c)) < 0)
+        {
+            // print error to logfile
+            if (logging)
+                LoggingUtil::error("Buffer exceeded maximum size! Stopped parsing\n" + buffer->print(), logfile);
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
 int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const vector<char> stopChars)
 {
     char c;
@@ -309,6 +416,21 @@ int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const vector
     return 0;
 }
 
+string ParsingUtil::writeToString(FILE *ipFile, const char stopChar)
+{
+    char c;
+    string res = "";
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == stopChar)
+            return res;
+
+        res += c;
+    }
+
+    return "0";
+}
+
 string ParsingUtil::writeToString(FILE *ipFile, const vector<char> stopChars)
 {
     char c;
@@ -325,10 +447,26 @@ string ParsingUtil::writeToString(FILE *ipFile, const vector<char> stopChars)
     return 0;
 }
 
+string ParsingUtil::writeToString(DynamicBuffer* buffer, size_t offset, const vector<char> stopChars)
+{
+    char c;
+    string res = "";
+    for (size_t i = offset; i < buffer->length(); i++)
+    {
+        c = buffer->read(i);
+        for (size_t j = 0; j < stopChars.size(); j++)
+            if (c == stopChars[j])
+                return res;
+
+        res += c;
+    }
+
+    return 0;
+}
+
 unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
 {
     // open file
-    vector<char> stopChars = { '\"' };
     FILE* ipFile = fopen(path, "r");
     if (!ipFile)
     {
@@ -337,17 +475,19 @@ unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
     }
 
     unordered_map<string,int>* hashmap = new unordered_map<string,int>();
-    int res = 0;
-    while (!(res = this->findPattern(ipFile, TITLE)))
+    // get id
+    int id = 0;
+    while ((id = stoi(this->writeToString(ipFile, ':'))))
     {
-        // get entry from file
+        // get title
         bool fatal = false;
         DynamicBuffer titleBuffer(TITLE_LENGTH);
         titleBuffer.setMax(PATH_LENGTH);
-        fatal |= (this->writeToBuffer(ipFile, &titleBuffer, stopChars) == -1);
-        if (this->findPattern(ipFile, ID))
-            LoggingUtil::warning("Hashmap file ended unexpectedly", logfile);
-        int id = stoi(this->writeToString(ipFile, stopChars));
+        int res = this->writeToBuffer(ipFile, &titleBuffer, '\n');
+        // print error if buffer overflow/warning if file ended
+        fatal |= (res == -1);
+        if (!res)
+            LoggingUtil::warning("Hashmap ended after Category " + titleBuffer.print(), logfile);
 
         // add entry to map
         pair<string,int> entry(titleBuffer.print(), id);
@@ -406,5 +546,27 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
     if (linkmap->size() == 0)
         LoggingUtil::warning("Empty linkmap", logfile);
     return linkmap;
+}
+
+vector<int>* ParsingUtil::writeCategoryToBuffer(unordered_map<int,string>::const_iterator categoryLinks)
+{
+    // get category ids from string
+    vector<int>* res = new vector<int>();
+    string idBuffer = "";
+    for (int i = 0; i < categoryLinks->second.size(); i++)
+    {
+        char c = categoryLinks->second[i];
+        if (c == '0' || c == '1' || c == '2' || c == '3' || c == '4' || c == '5' || c == '6' || c == '7' || c == '8' || c == '9')
+            idBuffer += c;
+        if (c == ',')
+        {
+            res->push_back(stoi(idBuffer));
+            idBuffer = "";
+        }
+        if (c != '0' && c != '1' && c != '2' && c != '3' && c != '4' && c != '5' && c != '6' && c != '7' && c != '8' && c != '9' && c != ',')
+            cout << categoryLinks->second << endl;
+    }
+
+    return res;
 }
 

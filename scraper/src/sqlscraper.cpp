@@ -3,8 +3,8 @@
 #include <vector>
 #include <unordered_map>
 
-#define HASHMAP_PATH "../media/english/jsonFiles/hashmap.json"
-#define LINKMAP_PATH "../media/english/jsonFiles/linkmap.json"
+#define HASHMAP_PATH "../../media/english/index-articles.txt"
+#define LINKMAP_PATH "../../media/english/linkmap.json"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
 
@@ -130,17 +130,17 @@ unordered_map<int,string>* SQLScraper::createLinkmap(const char* fPath)
     cout << "Loading " << HASHMAP_PATH << endl;
     unordered_map<string,int>* hashmap = parser.parseHashmap(HASHMAP_PATH);
     if (!hashmap)
-        return 0;
+        return NULL;
 
     // try to open file
     FILE* ipFile = fopen(LINKMAP_PATH, "r");
     if (ipFile)
     {
-        cout << "Overwriting file " << LINKMAP_PATH;
+        cout << "Overwriting file " << LINKMAP_PATH << endl;
         fclose(ipFile);
     }
     else
-        cout << "Creating file for linkmap at " << LINKMAP_PATH;
+        cout << "Creating file for linkmap at " << LINKMAP_PATH << endl;
     ipFile = fopen(fPath, "r");
     if (!ipFile)
     {
@@ -242,14 +242,11 @@ int SQLScraper::writeLinkmap(unordered_map<int,string>* linkmap, const char* pat
     for (auto it = linkmap->begin(); it != linkmap->end(); it++)
     {
         if (count)
-            fputs(",\n", pFile);
-        fputs("{\"id\":\"", pFile);
-        fputs(to_string(it->first).c_str(), pFile);
-        fputs("\",\"categories\":[", pFile);
-        fputs(it->second.c_str(), pFile);
-        fputs("]}", pFile);
+            fputs(",", pFile);
+        fprintf(pFile, "\n{\"id\":\"%d\",\"categories\":[%s]}", to_string(it->first).c_str(), it->second.c_str());
         count++;
     }
+    fputc('\n', pFile);
     fclose(pFile);
     return count;
 }

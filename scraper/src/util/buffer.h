@@ -49,6 +49,7 @@ public:
 
   // function for printing
   std::string print() const { return std::string(p_Buffer); }
+  std::string print(size_t offset) const { return offset < bufferLength ? std::string(p_Buffer + offset) : ""; }
 
   // read char at position
   char read(size_t id)
