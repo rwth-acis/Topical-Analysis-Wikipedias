@@ -154,7 +154,7 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
 
     // get to beginning of entry
     parser.findPattern(ipFile, SQL_TABLE_START);
-    int count = 0;
+    long count = 0;
     while (!parser.findSQLPattern(ipFile, "("))
     {
         // get id of page
@@ -223,28 +223,50 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
     return linkmap;
 }
 
-int SQLScraper::writeLinkmap(unordered_map<int,int>* linkmap, const char* path)
+long SQLScraper::writeLinkmap(unordered_map<int,int>* linkmap, const char* path)
 {
-    FILE* pFile = fopen(path, "r");
+    short pageCount = 0;
+    string fPath = to_string(pageCount) + path;
+    FILE* pFile = fopen(fPath.c_str(), "r");
     if (pFile)
     {
-        cout << "Overwriting file " << path << endl;
+        cout << "Overwriting file " << fPath << endl;
         fclose(pFile);
     }
     else
-        cout << "Writing file " << path << endl;
-    pFile = fopen(path, "w");
-    int count = 0;
+        cout << "Writing file " << fPath << endl;
+    pFile = fopen(fPath.c_str(), "w");
+    fputc('[', pFile);
+    long count = 0;
     if (linkmap->begin() == linkmap->end())
         LoggingUtil::error("Empty linkmap", logfile);
     for (auto it = linkmap->begin(); it != linkmap->end(); it++)
     {
         if (count)
             fputs(",", pFile);
-        fprintf(pFile, "\n{\"id\":\"%d\",\"categories\":[%d]}", it->first, it->second);
+        fprintf(pFile, "\n{\"_from\":\"enPages/%d\",\"_to\":\"enPages/%d\"}", it->first, it->second);
         count++;
+
+        // after 1million links open new file
+        if (count >= 1000000)
+        {
+            fputs("\n]", pFile);
+            fclose(pFile);
+            pageCount++;
+            fPath = to_string(pageCount) + path;
+            pFile = fopen(fPath.c_str(), "r");
+            if (pFile)
+            {
+                cout << "Overwriting file " << fPath << endl;
+                fclose(pFile);
+            }
+            else
+                cout << "Writing file " << fPath << endl;
+            pFile = fopen(fPath.c_str(), "w");
+            fputc('[', pFile);
+        }
     }
-    fputc('\n', pFile);
+    fputs("\n]\n", pFile);
     fclose(pFile);
     return count;
 }

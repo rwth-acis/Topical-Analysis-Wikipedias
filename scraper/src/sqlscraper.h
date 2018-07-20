@@ -8,7 +8,7 @@ class SQLScraper
 {
     const char* logfile;
     ParsingUtil parser;
-    int writeLinkmap(std::unordered_map<int,int>* linkmap, const char* path);
+    long writeLinkmap(std::unordered_map<int,int>* linkmap, const char* path);
 public:
     SQLScraper(const char *logfile);
     SQLScraper(const char *ownLogfile, const char* parserLogfile);

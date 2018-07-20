@@ -484,8 +484,8 @@ unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
     {
         // get title
         bool fatal = false;
-        DynamicBuffer titleBuffer(TITLE_LENGTH);
-        titleBuffer.setMax(PATH_LENGTH);
+        DynamicBuffer titleBuffer(PATH_LENGTH);
+        titleBuffer.setMax(CATEGORY_BUFFER);
         int res = this->writeToBuffer(ipFile, &titleBuffer, '\n');
         // print error if buffer overflow/warning if file ended
         fatal |= (res == -1);
