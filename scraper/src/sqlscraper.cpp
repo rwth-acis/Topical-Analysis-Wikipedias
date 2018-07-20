@@ -147,12 +147,11 @@ unordered_map<int,string>* SQLScraper::createLinkmap(const char* fPath)
         cerr << "Could not open file " << fPath;
         return NULL;
     }
-
-
     // initialize linkmap
     cout << "Reading category links from file " << fPath << endl;
     vector<char> stopChars = { ',', '\'' };
     unordered_map<int,string>* linkmap = new unordered_map<int,string>();
+
     // get to beginning of entry
     parser.findPattern(ipFile, SQL_TABLE_START);
     int cur_id = 0, prev_id = 0, totalCount = 0, count = 0;
@@ -179,6 +178,7 @@ unordered_map<int,string>* SQLScraper::createLinkmap(const char* fPath)
         // get title of category
         char c,p = 0;
         DynamicBuffer titleBuffer(TITLE_LENGTH);
+
         // title end is identified by ' character
         while (!((c = fgetc(ipFile)) == '\'' && p != '\\'))
         {
@@ -196,7 +196,6 @@ unordered_map<int,string>* SQLScraper::createLinkmap(const char* fPath)
                 titleBuffer.write(c);
             p = c;
         }
-
         // get id of category
         unordered_map<string,int>::const_iterator catId = hashmap->find(titleBuffer.print());
         if (catId != hashmap->end())
@@ -243,7 +242,7 @@ int SQLScraper::writeLinkmap(unordered_map<int,string>* linkmap, const char* pat
     {
         if (count)
             fputs(",", pFile);
-        fprintf(pFile, "\n{\"id\":\"%d\",\"categories\":[%s]}", to_string(it->first).c_str(), it->second.c_str());
+        fprintf(pFile, "\n{\"id\":\"%d\",\"categories\":[%s]}", it->first, it->second.c_str());
         count++;
     }
     fputc('\n', pFile);

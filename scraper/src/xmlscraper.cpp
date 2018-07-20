@@ -5,7 +5,7 @@
 // path to arangoDB
 #define BASE_PATH "http://localhost:8529//_db/_system/wikipics/"
 // path to minimized files
-#define ARTICLES_PATH "../../media/english/index-aticles.txt"
+#define ARTICLES_PATH "../../media/english/index-articles.txt"
 #define CATGORIES_PATH "../../media/english/index-categories.txt"
 // path to json files with categories/articles/category links
 #define JSON_CATEGORY_PATH "../../media/english/jsonFiles/categories.json"
@@ -13,6 +13,9 @@
 #define JSON_CATEGORYLINK_PATH "../../media/english/jsonFiles/categoryLinks.json"
 // path to linkmap
 #define LINKMAP_PATH "../../media/english/linkmap.json"
+// sizes for progress estimation
+#define ARTICLES_SIZE 669749173
+#define CATEGORIES_SIZE 69860671
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
@@ -31,6 +34,7 @@
 #define TEMPLATE 49310588
 #define MAINTENANCE 738040
 #define TRACKING 7361045
+#define STUB 869270
 #define REDIRECT 30334744
 #define DISAMBIGUATION 19204864
 
@@ -68,21 +72,30 @@ void XMLScraper::scrapeCategories()
         cerr << "Could not open file " CATGORIES_PATH << endl;
         return;
     }
+    fclose(ipFile);
 
     // load linkmap
+    cout << "Load linkmap from " << LINKMAP_PATH << endl;
     unordered_map<int,string>* linkmap = parser.parseLinkmap(LINKMAP_PATH);
+    if (linkmap == NULL)
+    {
+        cerr << "Error loading linkmap" << endl;
+    }
 
     // create output files
     FILE* opFile = fopen(JSON_CATEGORY_PATH, "r");
     if (opFile)
     {
         cout << "Overwriting file " << JSON_CATEGORY_PATH << endl;
+        fclose(opFile);
+        opFile = fopen(JSON_CATEGORY_PATH, "w");
         fputc('[', opFile);
         fclose(opFile);
     }
     else
     {
         cout << "Creating output file for categories at " << JSON_CATEGORY_PATH << endl;
+        opFile = fopen(JSON_CATEGORY_PATH, "w");
         fputc('[', opFile);
         fclose(opFile);
     }
@@ -91,37 +104,54 @@ void XMLScraper::scrapeCategories()
     if (opFile)
     {
         cout << "Overwriting file " << JSON_CATEGORYLINK_PATH << endl;
+        fclose(opFile);
+        opFile = fopen(JSON_CATEGORYLINK_PATH, "w");
         fputc('[', opFile);
         fclose(opFile);
     }
     else
     {
-        cout << "Creating output file for categories at " << JSON_CATEGORYLINK_PATH << endl;
+        cout << "Creating output file for the edges at " << JSON_CATEGORYLINK_PATH << endl;
+        opFile = fopen(JSON_CATEGORYLINK_PATH, "w");
         fputc('[', opFile);
         fclose(opFile);
     }
 
+    ipFile = fopen(CATGORIES_PATH, "r");
     // buffer line
     DynamicBuffer lineBuffer(LARGE_BACKLOG);
-    int res, catCount = 0, linkCount = 0;
-    while ((res = parser.writeToBuffer(ipFile, &lineBuffer, '\n')))
+    lineBuffer.setMax(MAX_BUFFER_SIZE);
+    int res, catCount = 0, linkCount = 0, prog = 0;
+    while ((res = parser.writeToBuffer(ipFile, &lineBuffer, '|')))
     {
+        // compute progress indicator
+        if (((ftell(ipFile)*10)/CATEGORIES_SIZE) > prog || (CATEGORIES_SIZE - ftell(ipFile) < LARGE_BACKLOG && prog <= 10))
+        {
+            prog++;
+            cout << "Read " << prog*10 << "% of categories\n";
+        }
         // get id
-        size_t idx = parser.findPattern(&lineBuffer, ":") + 1;
-        int id = stoi(parser.writeToString(&lineBuffer, idx, {':'}));
+        int id = stoi(parser.writeToString(&lineBuffer, 0, {':'}));
 
         // get title
-        idx = parser.findPattern(&lineBuffer, idx, ":");
+        size_t idx = parser.findPattern(&lineBuffer, ":") + 1;
         string title = lineBuffer.print(idx);
+        lineBuffer.flush();
 
         // get categories
         unordered_map<int,string>::const_iterator categories = linkmap->find(id);
+        if (categories == linkmap->end())
+        {
+            LoggingUtil::warning("No match for category " + title, logfile);
+            continue;
+        }
         vector<int>* catBuffer = parser.writeCategoryToBuffer(categories);
 
         // check for "bad" categories
         if (!this->isTopical(catBuffer))
         {
-            LoggingUtil::warning("Category " + title + " not topical");
+            LoggingUtil::warning("Category " + title + " not topical", logfile);
+            delete catBuffer;
             continue;
         }
 
@@ -143,7 +173,14 @@ void XMLScraper::scrapeCategories()
             linkCount++;
         }
         fclose(opFile);
+        delete catBuffer;
     }
+    opFile = fopen(JSON_CATEGORY_PATH, "a");
+    fputs("\n]\n", opFile);
+    fclose(opFile);
+    opFile = fopen(JSON_CATEGORYLINK_PATH, "a");
+    fputs("\n]\n", opFile);
+    fclose(opFile);
     cout << "Got " << catCount << " categories with " << linkCount << " links\n";
     return;
 }
@@ -157,6 +194,7 @@ void XMLScraper::scrapeArticles()
         cerr << "Could not open file " ARTICLES_PATH << endl;
         return;
     }
+    fclose(ipFile);
 
     // load linkmap
     unordered_map<int,string>* linkmap = parser.parseLinkmap(LINKMAP_PATH);
@@ -166,53 +204,71 @@ void XMLScraper::scrapeArticles()
     if (opFile)
     {
         cout << "Overwriting file " << JSON_ARTICLE_PATH << endl;
+        fclose(opFile);
+        opFile = fopen(JSON_ARTICLE_PATH, "w");
         fputc('[', opFile);
         fclose(opFile);
     }
     else
     {
-        cout << "Creating output file for categories at " << JSON_ARTICLE_PATH << endl;
+        cout << "Creating output file for articles at " << JSON_ARTICLE_PATH << endl;
+        opFile = fopen(JSON_ARTICLE_PATH, "w");
         fputc('[', opFile);
         fclose(opFile);
     }
 
+    ipFile = fopen(ARTICLES_PATH, "r");
     // buffer line
     DynamicBuffer lineBuffer(LARGE_BACKLOG);
-    int res, count = 0;
-    while ((res = parser.writeToBuffer(ipFile, &lineBuffer, '\n')))
+    int res, count = 0, prog = 0;
+    while ((res = parser.writeToBuffer(ipFile, &lineBuffer, '|')))
     {
+        // compute progress indicator
+        if (((ftell(ipFile)*10)/ARTICLES_SIZE) > prog || (ARTICLES_SIZE - ftell(ipFile) < LARGE_BACKLOG && prog <= 10))
+        {
+            prog++;
+            cout << "Read " << prog*10 << "% of categories\n";
+        }
         // get id
         size_t idx = parser.findPattern(&lineBuffer, ":") + 1;
         int id = stoi(parser.writeToString(&lineBuffer, idx, {':'}));
 
         // get title
-        idx = parser.findPattern(&lineBuffer, idx, ":");
+        idx = parser.findPattern(&lineBuffer, idx, ":") + 1;
         string title = lineBuffer.print(idx);
+        lineBuffer.flush();
 
         // get categories
         unordered_map<int,string>::const_iterator categories = linkmap->find(id);
+        if (categories == linkmap->end())
+        {
+            LoggingUtil::warning("No match for article " + title, logfile);
+            continue;
+        }
         vector<int>* catBuffer = parser.writeCategoryToBuffer(categories);
 
         // check for "bad" categories
         if (!this->isArticle(catBuffer, linkmap))
         {
-            LoggingUtil::warning("Article " + title + " not topical");
+            LoggingUtil::warning("Article " + title + " not topical", logfile);
+            delete catBuffer;
             continue;
         }
         // print article
         opFile = fopen(JSON_ARTICLE_PATH, "a");
         if (count)
             fputc(',', opFile);
-        fprintf(opFile, "\n{\"title\":\"%s\",\"_key\":\"%d\",\"categories\":[}", title.c_str(), id);
+        fprintf(opFile, "\n{\"title\":\"%s\",\"_key\":\"%d\",\"categories\":[", title.c_str(), id);
         for (int i = 0; i < catBuffer->size(); i++)
         {
             if (i)
                 fputc(',', opFile);
-            fprintf(opFile, "\"enCategories/%d", catBuffer->at(i));
+            fprintf(opFile, "\"enCategories/%d\"", catBuffer->at(i));
         }
         fputs("]}", opFile);
         fclose(opFile);
         count++;
+        delete catBuffer;
     }
     cout << "Got " << count << " articles\n";
     return;
@@ -242,7 +298,7 @@ bool XMLScraper::isTopical(vector<int>* categories)
 {
     // check against "bad categories"
     for (int i = 0; i < categories->size(); i++)
-        if (categories->at(i) == MAINTENANCE || categories->at(i) == TEMPLATE || categories->at(i) == CONTAINER || categories->at(i) == HIDDEN || categories->at(i)  == TRACKING || categories->at(i) == REDIRECT)
+        if (categories->at(i) == MAINTENANCE || categories->at(i) == TEMPLATE || categories->at(i) == CONTAINER || categories->at(i) == HIDDEN || categories->at(i)  == TRACKING || categories->at(i) == REDIRECT || categories->at(i) == STUB)
             return false;
     return true;
 }

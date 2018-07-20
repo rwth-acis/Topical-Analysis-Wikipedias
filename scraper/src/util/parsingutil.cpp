@@ -7,7 +7,10 @@
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
-#define CATEGORY_BUFFER 4096
+#define CATEGORY_BUFFER 1024
+#define MAX_CATEGORY_BUFFER 8192
+// last known linkmap size
+#define LINKMAP_SIZE 1844806964
 
 using namespace std;
 ParsingUtil::ParsingUtil()
@@ -416,7 +419,7 @@ int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const vector
     return 0;
 }
 
-string ParsingUtil::writeToString(FILE *ipFile, const char stopChar)
+string ParsingUtil::writeToString(FILE* ipFile, const char stopChar)
 {
     char c;
     string res = "";
@@ -431,7 +434,7 @@ string ParsingUtil::writeToString(FILE *ipFile, const char stopChar)
     return "0";
 }
 
-string ParsingUtil::writeToString(FILE *ipFile, const vector<char> stopChars)
+string ParsingUtil::writeToString(FILE* ipFile, const vector<char> stopChars)
 {
     char c;
     string res = "";
@@ -444,7 +447,7 @@ string ParsingUtil::writeToString(FILE *ipFile, const vector<char> stopChars)
         res += c;
     }
 
-    return 0;
+    return "0";
 }
 
 string ParsingUtil::writeToString(DynamicBuffer* buffer, size_t offset, const vector<char> stopChars)
@@ -461,7 +464,7 @@ string ParsingUtil::writeToString(DynamicBuffer* buffer, size_t offset, const ve
         res += c;
     }
 
-    return 0;
+    return "0";
 }
 
 unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
@@ -519,17 +522,24 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
     }
 
     unordered_map<int,string>* linkmap = new unordered_map<int,string>();
-    int res = 0;
+    int res = 0, prog = 0;
     while (!(res = this->findPattern(ipFile, ID)))
     {
+        // compute progress indicator
+        if (((ftell(ipFile)*20)/LINKMAP_SIZE) > prog || (LINKMAP_SIZE - ftell(ipFile) < CATEGORY_BUFFER && prog <= 10))
+        {
+            prog++;
+            cout << "Read " << prog*5 << "% of linkmap\n";
+        }
         // get entry from file
         bool fatal = false;
         int id = stoi(this->writeToString(ipFile, stopChars));
-        DynamicBuffer catBuffer(PATH_LENGTH);
-        catBuffer.setMax(CATEGORY_BUFFER);
+        DynamicBuffer catBuffer(CATEGORY_BUFFER);
+        catBuffer.setMax(MAX_CATEGORY_BUFFER);
         if (this->findPattern(ipFile, CATEGORIES) == -1)
             LoggingUtil::warning("Linkmap file ended unexpectedly", logfile);
         fatal |= (this->writeToBuffer(ipFile, &catBuffer, stopChars) == -1);
+
         // add entry to map
         pair<int,string> entry(id, catBuffer.print());
         linkmap->insert(entry);
@@ -537,7 +547,7 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
         // check if fatal error has occured
         if (fatal)
         {
-            LoggingUtil::error("Fatal error (Buffer overflow): Integrity of file cannot be guaranteed", logfile);
+            LoggingUtil::error("Fatal error (Buffer overflow): Integrity of file cannot be guaranteed at page " + to_string(id), logfile);
             fclose(ipFile);
             delete linkmap;
             return NULL;
@@ -566,7 +576,7 @@ vector<int>* ParsingUtil::writeCategoryToBuffer(unordered_map<int,string>::const
         if (c != '0' && c != '1' && c != '2' && c != '3' && c != '4' && c != '5' && c != '6' && c != '7' && c != '8' && c != '9' && c != ',')
             cout << categoryLinks->second << endl;
     }
-
+    res->push_back(stoi(idBuffer));
     return res;
 }
 

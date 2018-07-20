@@ -110,6 +110,7 @@ int DynamicBuffer::write(std::string str)
 
 void DynamicBuffer::flush()
 {
+    delete []p_Buffer;
+    p_Buffer = new char[bufferSize];
     bufferLength = 0;
-    p_Buffer[0] = '\0';
 }

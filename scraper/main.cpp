@@ -95,21 +95,24 @@ int main(int argc, char* argv[])
             break;
         // parse articles
         case 'a':
+            cout << "Hello, I am a cool parsing program and I am gonna get right to parsing your articles :)\n";
             if (!scraper)
-                scraper = new XMLScraper(SQL_LOGFILE);
+                scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
             scraper->scrapeArticles();
             break;
         // parse categories
         case 'c':
+            cout << "Hello, I am a cool parsing program and I am gonna get right to parsing your categories :)\n";
             if (!scraper)
-                scraper = new XMLScraper(SQL_LOGFILE);
+                scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
             scraper->scrapeCategories();
             break;
         // get filtered xml files
         case 'i':
             if (!otherScraper)
-                otherScraper = new SQLScraper(SQL_LOGFILE);
+                otherScraper = new SQLScraper(PARSING_LOGFILE, SQL_LOGFILE);
             otherScraper->createLinkmap(SQL_CATEGORYLINKS_PATH);
+            break;
     }
     return 0;
 }
