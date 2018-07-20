@@ -95,10 +95,14 @@ int main(int argc, char* argv[])
             break;
         // parse articles
         case 'a':
-            cout << "Hello, I am a cool parsing program and I am gonna get right to parsing your articles :)\n";
+            input = "";
+            cout << "Hello, I am a horrible disappointment and leaking like an 80 year old D;\n"
+                    "You'll have to tell me, which of the three article files you want me to parse...\n";
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
-            scraper->scrapeArticles();
+            while (input == "")
+                cin >> input;
+            scraper->scrapeArticles(stoi(input));
             break;
         // parse categories
         case 'c':

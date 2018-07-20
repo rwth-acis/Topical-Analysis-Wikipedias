@@ -23,7 +23,7 @@ public:
     // tracking/hidden/container/template/maintenance categories are excluded
     // redirect pages are excluded
     void scrapeCategories();
-    void scrapeArticles();
+    void scrapeArticles(int fileNr);
 
 private:
 

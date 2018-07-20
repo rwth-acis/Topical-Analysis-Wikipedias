@@ -526,7 +526,7 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
     while (!(res = this->findPattern(ipFile, ID)))
     {
         // compute progress indicator
-        if (((ftell(ipFile)*20)/LINKMAP_SIZE) > prog || (LINKMAP_SIZE - ftell(ipFile) < CATEGORY_BUFFER && prog <= 10))
+        if (((ftell(ipFile)*20)/LINKMAP_SIZE) > prog || (LINKMAP_SIZE - ftell(ipFile) < CATEGORY_BUFFER && prog < 20))
         {
             prog++;
             cout << "Read " << prog*5 << "% of linkmap\n";
