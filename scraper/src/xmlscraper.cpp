@@ -174,7 +174,7 @@ void XMLScraper::scrapeCategories()
             {
                 if (linkCount)
                     fputc(',', opFile);
-                fprintf(opFile, "\n{\"_from\":\"enCategories/%d\",\"to\":\"enCategories/%d\"}", catBuffer->at(i), id);
+                fprintf(opFile, "\n{\"_from\":\"enCategories/%d\",\"_to\":\"enCategories/%d\"}", catBuffer->at(i), id);
                 linkCount++;
             }
             fclose(opFile);
@@ -280,7 +280,8 @@ void XMLScraper::scrapeArticles(int fileNr)
         fputs("]}", opFile);
         fclose(opFile);
         count++;
-        delete catBuffer;
+        if (hasCategories)
+            delete catBuffer;
     }
     cout << "Got " << count << " articles\n";
     return;

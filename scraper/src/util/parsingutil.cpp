@@ -490,7 +490,7 @@ unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
         // print error if buffer overflow/warning if file ended
         fatal |= (res == -1);
         if (!res)
-            LoggingUtil::warning("Hashmap ended after Category " + titleBuffer.print(), logfile);
+            LoggingUtil::warning("Hashmap ended after page " + titleBuffer.print(), logfile);
 
         // add entry to map
         pair<string,int> entry(titleBuffer.print(), id);

@@ -97,7 +97,7 @@ int main(int argc, char* argv[])
         case 'a':
             input = "";
             cout << "Hello, I am a horrible disappointment and leaking like an 80 year old D;\n"
-                    "You'll have to tell me, which of the three article files you want me to parse...\n";
+                    "You'll have to tell me, which of the six article files you want me to parse...\n";
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
             while (input == "")

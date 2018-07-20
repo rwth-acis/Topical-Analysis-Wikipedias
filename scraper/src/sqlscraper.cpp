@@ -3,7 +3,7 @@
 #include <vector>
 #include <unordered_map>
 
-#define HASHMAP_PATH "../../media/english/index-articles.txt"
+#define HASHMAP_PATH "../../media/english/index-pages.txt"
 #define LINKMAP_PATH "../../media/english/linkmap.json"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
@@ -124,7 +124,7 @@ int SQLScraper::splitFiles(const char *iPath, const char *oPath)
     return countFiles-1;
 }
 
-unordered_map<int,string>* SQLScraper::createLinkmap(const char* fPath)
+unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
 {
     // load hashmap
     cout << "Loading " << HASHMAP_PATH << endl;
@@ -150,81 +150,80 @@ unordered_map<int,string>* SQLScraper::createLinkmap(const char* fPath)
     // initialize linkmap
     cout << "Reading category links from file " << fPath << endl;
     vector<char> stopChars = { ',', '\'' };
-    unordered_map<int,string>* linkmap = new unordered_map<int,string>();
+    unordered_map<int,int>* linkmap = new unordered_map<int,int>();
 
     // get to beginning of entry
     parser.findPattern(ipFile, SQL_TABLE_START);
-    int cur_id = 0, prev_id = 0, totalCount = 0, count = 0;
-    DynamicBuffer catBuffer(TITLE_LENGTH);
+    int count = 0;
     while (!parser.findSQLPattern(ipFile, "("))
     {
         // get id of page
-        cur_id = stoi(parser.writeToString(ipFile, stopChars));
-        if (count && cur_id != prev_id)
-        {
-            // save entry to hashmap if next id
-            pair<int,string> entry(prev_id, catBuffer.print());
-            linkmap->insert(entry);
-            totalCount += count;
-            count = 0;
-            catBuffer.flush();
-        }
+        int id_from = stoi(parser.writeToString(ipFile, stopChars));
         if (!parser.findPattern(ipFile, stopChars))
         {
-            LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(cur_id), logfile);
-            cout << "Got " << totalCount << " links" << endl;
+            LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(id_from), logfile);
+            cout << "Got " << count << " links" << endl;
             return linkmap;
         }
         // get title of category
-        char c,p = 0;
+        char c;
+        bool escape = false;
         DynamicBuffer titleBuffer(TITLE_LENGTH);
+        titleBuffer.write("Category:");
 
         // title end is identified by ' character
-        while (!((c = fgetc(ipFile)) == '\'' && p != '\\'))
+        while (!((c = fgetc(ipFile)) == '\'' && !escape))
         {
             if (c == EOF)
             {
                 LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly while reading " + titleBuffer.print(), logfile);
-                cout << "Got " << totalCount << " links"  << endl;
+                cout << "Got " << count << " links"  << endl;
                 return linkmap;
             }
 
             // replace _ with spaces, dont print '\'
             if (c == '_')
                 titleBuffer.write(' ');
-            else if (c != '\\')
+            else if (c != '\\' || escape)
                 titleBuffer.write(c);
-            p = c;
+
+            // adjust escaping
+            if (c != '\\')
+                escape = false;
+            else
+                escape = !escape;
         }
         // get id of category
+        int id_to = 0;
         unordered_map<string,int>::const_iterator catId = hashmap->find(titleBuffer.print());
         if (catId != hashmap->end())
-        {
-            if (count)
-                catBuffer.write("," + to_string(catId->second));
-            else
-                catBuffer.write(to_string(catId->second));
-            count++;
-        }
+            id_to = catId->second;
         else
+        {
             LoggingUtil::warning("No match for category " + titleBuffer.print(), logfile);
+            continue;
+        }
 
         // go to end of entry
         if (parser.findSQLPattern(ipFile, "),") == -1)
         {
-            LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(cur_id) + " after reading category " + titleBuffer.print(), logfile);
-            cout << "Got " << totalCount << " links" << endl;
+            LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(id_from) + " after reading category " + titleBuffer.print(), logfile);
+            cout << "Got " << count << " links" << endl;
             this->writeLinkmap(linkmap, LINKMAP_PATH);
             return linkmap;
         }
-        prev_id = cur_id;
+
+        // save entry to linkmap
+        pair<int,int> entry(id_from, id_to);
+        linkmap->insert(entry);
+        count++;
     }
-    cout << "Got " << totalCount << " links" << endl;
+    cout << "Got " << count << " links" << endl;
     this->writeLinkmap(linkmap, LINKMAP_PATH);
     return linkmap;
 }
 
-int SQLScraper::writeLinkmap(unordered_map<int,string>* linkmap, const char* path)
+int SQLScraper::writeLinkmap(unordered_map<int,int>* linkmap, const char* path)
 {
     FILE* pFile = fopen(path, "r");
     if (pFile)
@@ -242,7 +241,7 @@ int SQLScraper::writeLinkmap(unordered_map<int,string>* linkmap, const char* pat
     {
         if (count)
             fputs(",", pFile);
-        fprintf(pFile, "\n{\"id\":\"%d\",\"categories\":[%s]}", it->first, it->second.c_str());
+        fprintf(pFile, "\n{\"id\":\"%d\",\"categories\":[%d]}", it->first, it->second);
         count++;
     }
     fputc('\n', pFile);
