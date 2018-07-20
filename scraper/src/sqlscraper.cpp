@@ -4,9 +4,10 @@
 #include <unordered_map>
 
 #define HASHMAP_PATH "../../media/english/index-pages.txt"
-#define LINKMAP_PATH "../../media/english/linkmap.json"
+#define LINKMAP_PATH "../../media/english/linkmap"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
+#define LINKFILE_SIZE 18137842743
 
 using namespace std;
 SQLScraper::SQLScraper(const char* logfile)
@@ -133,18 +134,11 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
         return NULL;
 
     // try to open file
-    FILE* ipFile = fopen(LINKMAP_PATH, "r");
-    if (ipFile)
-    {
-        cout << "Overwriting file " << LINKMAP_PATH << endl;
-        fclose(ipFile);
-    }
-    else
-        cout << "Creating file for linkmap at " << LINKMAP_PATH << endl;
-    ipFile = fopen(fPath, "r");
+    FILE* ipFile = fopen(fPath, "r");
     if (!ipFile)
     {
         cerr << "Could not open file " << fPath;
+        delete hashmap;
         return NULL;
     }
     // initialize linkmap
@@ -155,14 +149,22 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
     // get to beginning of entry
     parser.findPattern(ipFile, SQL_TABLE_START);
     long count = 0;
+    int prog = 0;
     while (!parser.findSQLPattern(ipFile, "("))
     {
+        // compute progress indicator
+        if (((ftell(ipFile)*20)/LINKFILE_SIZE) > prog || (LINKFILE_SIZE - ftell(ipFile) < TITLE_LENGTH && prog < 20))
+        {
+            prog++;
+            cout << "Read " << prog*5 << "% of linkfile\n";
+        }
         // get id of page
         int id_from = stoi(parser.writeToString(ipFile, stopChars));
         if (!parser.findPattern(ipFile, stopChars))
         {
             LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(id_from), logfile);
             cout << "Got " << count << " links" << endl;
+            delete hashmap;
             return linkmap;
         }
         // get title of category
@@ -178,6 +180,7 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
             {
                 LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly while reading " + titleBuffer.print(), logfile);
                 cout << "Got " << count << " links"  << endl;
+                delete hashmap;
                 return linkmap;
             }
 
@@ -210,6 +213,7 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
             LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(id_from) + " after reading category " + titleBuffer.print(), logfile);
             cout << "Got " << count << " links" << endl;
             this->writeLinkmap(linkmap, LINKMAP_PATH);
+            delete hashmap;
             return linkmap;
         }
 
@@ -220,13 +224,14 @@ unordered_map<int,int>* SQLScraper::createLinkmap(const char* fPath)
     }
     cout << "Got " << count << " links" << endl;
     this->writeLinkmap(linkmap, LINKMAP_PATH);
+    delete hashmap;
     return linkmap;
 }
 
 long SQLScraper::writeLinkmap(unordered_map<int,int>* linkmap, const char* path)
 {
-    short pageCount = 0;
-    string fPath = to_string(pageCount) + path;
+    short pageCount = 1;
+    string fPath = path + to_string(pageCount) + ".json";
     FILE* pFile = fopen(fPath.c_str(), "r");
     if (pFile)
     {
@@ -247,13 +252,14 @@ long SQLScraper::writeLinkmap(unordered_map<int,int>* linkmap, const char* path)
         fprintf(pFile, "\n{\"_from\":\"enPages/%d\",\"_to\":\"enPages/%d\"}", it->first, it->second);
         count++;
 
-        // after 1million links open new file
-        if (count >= 1000000)
+        // after 2million links open new file
+        if (count >= 2000000)
         {
-            fputs("\n]", pFile);
+            fputs("\n]\n", pFile);
             fclose(pFile);
             pageCount++;
-            fPath = to_string(pageCount) + path;
+            count = 0;
+            fPath = path + to_string(pageCount) + ".json";
             pFile = fopen(fPath.c_str(), "r");
             if (pFile)
             {
@@ -268,7 +274,8 @@ long SQLScraper::writeLinkmap(unordered_map<int,int>* linkmap, const char* path)
     }
     fputs("\n]\n", pFile);
     fclose(pFile);
-    return count;
+    cout << "Got " << to_string(2000000*(pageCount-1)+count) << " links in " << pageCount << " pages\n";
+    return (2000000*(pageCount-1)+count);
 }
 
 int SQLScraper::sqlToCSV(const char* iPath, const char* oPath)

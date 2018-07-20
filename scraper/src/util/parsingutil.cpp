@@ -9,8 +9,9 @@
 #define PATH_LENGTH 256
 #define CATEGORY_BUFFER 1024
 #define MAX_CATEGORY_BUFFER 8192
-// last known linkmap size
+// last known file sizes
 #define LINKMAP_SIZE 1844806964
+#define HASHMAP_SIZE 502047972
 
 using namespace std;
 ParsingUtil::ParsingUtil()
@@ -479,9 +480,15 @@ unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
 
     unordered_map<string,int>* hashmap = new unordered_map<string,int>();
     // get id
-    int id = 0;
+    int id = 0, prog = 0;
     while ((id = stoi(this->writeToString(ipFile, ':'))))
     {
+        // compute progress indicator
+        if (((ftell(ipFile)*10)/HASHMAP_SIZE) > prog || (HASHMAP_SIZE - ftell(ipFile) < CATEGORY_BUFFER && prog < 10))
+        {
+            prog++;
+            cout << "Read " << prog*10 << "% of hashmap\n";
+        }
         // get title
         bool fatal = false;
         DynamicBuffer titleBuffer(PATH_LENGTH);
