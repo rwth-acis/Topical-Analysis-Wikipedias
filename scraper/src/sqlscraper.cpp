@@ -3,7 +3,7 @@
 #include <unordered_map>
 
 #define HASHMAP_PATH "../../media/english/index-pages.txt"
-#define LINKMAP_PATH "../../media/english/linkmap"
+#define LINKMAP_PATH "../../media/english/jsonFiles/linkmap"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
 #define LINKFILE_SIZE 18137842743

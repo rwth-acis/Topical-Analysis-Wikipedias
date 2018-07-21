@@ -91,5 +91,4 @@ public:
   int write(char c);
   int write(std::string);
 };
-
 #endif // BUFFER_H

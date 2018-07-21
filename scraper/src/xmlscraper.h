@@ -22,8 +22,7 @@ public:
     // creates a JSON file containing all categories/articles with category tags
     // tracking/hidden/container/template/maintenance categories are excluded
     // redirect pages are excluded
-    void scrapeCategories();
-    void scrapeArticles(int fileNr);
+    size_t scrapePages();
 
 private:
 

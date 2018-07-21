@@ -1,9 +1,8 @@
 #include "parsingutil.h"
 #include "loggingutil.h"
 // JSON TAGS
-#define TITLE "\"title\":\""
-#define ID "\"id\":\""
-#define CATEGORIES "\"categories\":["
+#define FROM "\"_from\":\"enPages/"
+#define TO "\"_to\":\"enPages/"
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
@@ -567,48 +566,45 @@ unordered_map<int,string>* ParsingUtil::parseReverseHashmap(const char* path)
 
 unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
 {
-    vector<char> stopChars = { '\"', ']' };
+    vector<char> stopChars = { '\"' };
     unordered_map<int,string>* linkmap = new unordered_map<int,string>();
+    size_t cur_id = 0, prev_id = 0, count = 0;;
+    bool first = true;
+    string catBuffer = "";
     for (int i = 1; i <= 31; i++)
     {
         // open file
-        FILE* ipFile = fopen(path, "r");
+        string fPath = path + to_string(i) + ".json";
+        FILE* ipFile = fopen(fPath.c_str(), "r");
         if (!ipFile)
         {
-            cerr << "Could not open file " << path << endl;
+            cerr << "Could not open file " << fPath << endl;
             return NULL;
         }
-
-        int res = 0, prog = 0;
-        while (!(res = this->findPattern(ipFile, ID)))
+        cout << "Reading file " << i << "/31" << endl;
+        while (!(this->findPattern(ipFile, FROM)))
         {
-            // compute progress indicator
-            if (((ftell(ipFile)*20)/LINKMAP_SIZE) > prog || (LINKMAP_SIZE - ftell(ipFile) < CATEGORY_BUFFER && prog < 20))
-            {
-                prog++;
-                cout << "Read " << prog*5 << "% of linkmap\n";
-            }
             // get entry from file
-            bool fatal = false;
-            int id = stoi(this->writeToString(ipFile, stopChars));
-            DynamicBuffer catBuffer(CATEGORY_BUFFER);
-            catBuffer.setMax(MAX_CATEGORY_BUFFER);
-            if (this->findPattern(ipFile, CATEGORIES) == -1)
-                LoggingUtil::warning("Linkmap file ended unexpectedly", logfile);
-            fatal |= (this->writeToBuffer(ipFile, &catBuffer, stopChars) == -1);
+            cur_id = stoi(this->writeToString(ipFile, stopChars));
 
-            // add entry to map
-            pair<int,string> entry(id, catBuffer.print());
-            linkmap->insert(entry);
-
-            // check if fatal error has occured
-            if (fatal)
+            // add entry to map if next id
+            if (!first && cur_id != prev_id)
             {
-                LoggingUtil::error("Fatal error (Buffer overflow): Integrity of file cannot be guaranteed at page " + to_string(id), logfile);
-                fclose(ipFile);
-                delete linkmap;
-                return NULL;
+                pair<int,string> entry(prev_id, catBuffer);
+                linkmap->insert(entry);
+//                cout << prev_id << "[" << catBuffer << "]" << endl;
+                count = 0;
+                catBuffer = "";
             }
+            if (this->findPattern(ipFile, TO) == -1)
+                LoggingUtil::warning("Linkmap file ended unexpectedly", logfile);
+            if (count)
+                catBuffer += "," + this->writeToString(ipFile, stopChars);
+            else
+                catBuffer += this->writeToString(ipFile, stopChars);
+            prev_id = cur_id;
+            count++;
+            first = false;
         }
     }
     if (linkmap->size() == 0)
