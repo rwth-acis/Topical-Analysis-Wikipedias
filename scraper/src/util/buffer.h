@@ -47,9 +47,10 @@ public:
   // flush buffer
   void flush();
 
-  // function for printing
+  // functions for printing
   std::string print() const { return std::string(p_Buffer); }
   std::string print(size_t offset) const { return offset < bufferLength ? std::string(p_Buffer + offset) : ""; }
+  std::string print(size_t from, size_t to);
 
   // read char at position
   char read(size_t id)

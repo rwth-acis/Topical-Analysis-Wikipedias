@@ -33,6 +33,8 @@ DynamicBuffer::~DynamicBuffer()
 
 size_t DynamicBuffer::setMax(size_t max)
 {
+    if (!max)
+        std::cout << "Buffer size limitation lifted";
     if (max < this->size())
     {
         std::cerr << "Cannot set maximum size of buffer lower than its size" << std::endl;
@@ -106,6 +108,15 @@ int DynamicBuffer::write(std::string str)
 
     bufferLength = newLength;
     return bufferLength;
+}
+
+std::string DynamicBuffer::print(size_t from, size_t to)
+{
+    std::string res = "";
+    if (from < bufferLength && to < bufferLength && from < to)
+        for (size_t i = from; i < to; i++)
+            res += p_Buffer[i];
+    return res;
 }
 
 void DynamicBuffer::flush()

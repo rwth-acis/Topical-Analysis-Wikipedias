@@ -38,7 +38,6 @@ int ParsingUtil::findPattern(FILE *ipFile, const string stopStr)
         if (state >= stopStr.size())
             return 0;
     }
-
     return -1;
 }
 
@@ -59,7 +58,6 @@ bool ParsingUtil::searchPattern(DynamicBuffer* buffer, const string stopStr)
         if (state >= stopStr.size())
             return true;
     }
-
     return false;
 }
 
@@ -72,7 +70,6 @@ char ParsingUtil::findPattern(FILE *ipFile, const vector<char> stopChars)
             if (c == stopChars[i])
                 return c;
     }
-
     return 0;
 }
 
@@ -92,7 +89,6 @@ size_t ParsingUtil::findPattern(DynamicBuffer* buffer, const string stopStr)
         if (state >= stopStr.size())
             return i;
     }
-
     return 0;
 }
 
@@ -112,7 +108,6 @@ size_t ParsingUtil::findPattern(DynamicBuffer* buffer, size_t offset, const std:
         if (state >= stopStr.size())
             return i;
     }
-
     return 0;
 }
 
@@ -137,6 +132,30 @@ int ParsingUtil::findSQLPattern(FILE *ipFile,  const string stopStr)
             p = c;
     }
     return -1;
+}
+
+short ParsingUtil::findPattern(FILE* ipFile, const std::string stopStrOne, const std::string stopStrTwo)
+{
+    char c;
+    size_t stateOne = 0;
+    size_t stateTwo = 0;
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == (char) toupper(stopStrOne[stateOne]) || c == (char) tolower(stopStrOne[stateOne]))
+            stateOne++;
+        else
+            stateOne = 0;
+        if (c == (char) toupper(stopStrTwo[stateTwo]) || c == (char) tolower(stopStrTwo[stateTwo]))
+            stateTwo++;
+        else
+            stateTwo = 0;
+
+        if (stateOne >= stopStrOne.size())
+            return 1;
+        if (stateTwo >= stopStrTwo.size())
+            return 2;
+    }
+    return 0;
 }
 
 int ParsingUtil::findPattern(FILE *ipFile, const string stopStr, DynamicBuffer* backlog)
@@ -260,6 +279,26 @@ int ParsingUtil::findPattern(FILE *ipFile, const string stopStr, DynamicBuffer* 
     return 1;
 }
 
+long ParsingUtil::countChars(FILE *ipFile, const string stopStr)
+{
+    char c;
+    size_t state = 0;
+    size_t count = 0;
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == (char) toupper(stopStr[state]) || c == (char) tolower(stopStr[state]))
+            state++;
+        else
+            state = 0;
+
+        count++;
+        if (state >= stopStr.size())
+            return count - state;
+    }
+
+    return -1*count;
+}
+
 int ParsingUtil::writeToFile(FILE *ipFile, FILE *opFile, const string stopStr)
 {
     char c;
@@ -333,7 +372,7 @@ int ParsingUtil::writeSQLToFile(FILE *ipFile, FILE *opFile,  const string stopSt
 int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const string stopStr)
 {
     char c;
-    size_t state;
+    size_t state = 0;
     size_t initSize = buffer->size();
     int endSize = 0;
     while ((c = fgetc(ipFile)) != EOF)

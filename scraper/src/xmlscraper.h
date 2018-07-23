@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
-#include <unordered_map>
 #include "util/parsingutil.h"
 #include "util/buffer.h"
 
@@ -23,6 +22,10 @@ public:
     // tracking/hidden/container/template/maintenance categories are excluded
     // redirect pages are excluded
     size_t scrapePages();
+    // creates a CSV file with entries for each revision (reversions excluded)
+    // revisionId,pageId,title,userId,username,size,timestamp
+    // users without username/id and bots are excluded
+    size_t historyToCSV(short fileNr);
 
 private:
 

@@ -17,6 +17,7 @@ public:
 
     // function to set file pointer to next apperance of pattern
     int findPattern(FILE* ipFile, const std::string stopStr);
+    short findPattern(FILE* ipFile, const std::string stopStrOne, const std::string stopStrTwo);
     char findPattern(FILE* ipFile, const std::vector<char> stopChars);
     size_t findPattern(DynamicBuffer* buffer, const std::string stopStr);
     size_t findPattern(DynamicBuffer* buffer, size_t offset, const std::string stopStr);
@@ -28,6 +29,8 @@ public:
     int findPattern(FILE *ipFile, const std::string stopStr, DynamicBuffer* backlog);
     int findPattern(FILE *ipFile, const std::string stopStr, DynamicBuffer* backlog, char flushChar);
     int findPattern(FILE *ipFile, const std::string stopStr, DynamicBuffer* backlog, std::vector<char> escapeChars);
+    // function to count characters until pattern is encountered
+    long countChars(FILE *ipFile, const std::string stopStr);
     // function to write from input to output file until pattern is encountered
     int writeToFile(FILE* ipFile, FILE* opFile, const std::string stopStr);
     int writeToFile(FILE* ipFile, FILE* opFile, const std::vector<char> stopChars);
