@@ -10,6 +10,7 @@
 #define PARSING_LOGFILE "./parsingLogfile"
 // sql input files
 #define SQL_CATEGORYLINKS_PATH "../../media/english/rawFiles/enwiki-20180701-categorylinks.sql"
+#define SQL_USERS_PATH "../../media/english/rawFiles/enwiki-latest-user_groups.sql"
 #define SQL_TAXONOMY_PATH "../../media/english/rawFiles/wiki.category.taxonomy.tree.sql"
 // parsed sql files
 #define TXT_CATEGORYLINKS_PATH "../../media/english/categorylinks"
@@ -30,6 +31,7 @@ static struct option options[] = {
     {"logfile", no_argument, NULL, 'l'},
     {"scrape", no_argument, NULL, 's'},
     {"linkmap", no_argument, NULL, 'i'},
+    {"botset", no_argument, NULL, 'b'},
     {"history", no_argument, NULL, 'h'},
     {0, 0, 0, 0}
 };
@@ -43,7 +45,7 @@ int main(int argc, char* argv[])
     // find out what to do
     char opt;
     string input;
-    while ((opt = getopt_long(argc, argv, "lsih", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "lsibh", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -78,10 +80,16 @@ int main(int argc, char* argv[])
                 otherScraper = new SQLScraper(PARSING_LOGFILE, SQL_LOGFILE);
             otherScraper->createLinkmap(SQL_CATEGORYLINKS_PATH);
             break;
+        case 'b':
+            if (!otherScraper)
+                otherScraper = new SQLScraper(PARSING_LOGFILE, SQL_LOGFILE);
+            otherScraper->createBotSet(SQL_USERS_PATH);
+            break;
         case 'h':
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
             scraper->historyToCSV(0);
+            break;
     }
     return 0;
 }

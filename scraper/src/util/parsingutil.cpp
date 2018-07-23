@@ -1,5 +1,6 @@
 #include "parsingutil.h"
 #include "loggingutil.h"
+#include <unordered_set>
 // JSON TAGS
 #define FROM "\"_from\":\"enPages/"
 #define TO "\"_to\":\"enPages/"
@@ -399,7 +400,6 @@ int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const string
             return state;
         }
     }
-
     return 0;
 }
 
@@ -426,7 +426,6 @@ int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const char s
             return -1;
         }
     }
-
     return 0;
 }
 
@@ -454,7 +453,6 @@ int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const vector
             return -1;
         }
     }
-
     return 0;
 }
 
@@ -469,7 +467,6 @@ string ParsingUtil::writeToString(FILE* ipFile, const char stopChar)
 
         res += c;
     }
-
     return "0";
 }
 
@@ -485,7 +482,6 @@ string ParsingUtil::writeToString(FILE* ipFile, const vector<char> stopChars)
 
         res += c;
     }
-
     return "0";
 }
 
@@ -649,6 +645,24 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
     if (linkmap->size() == 0)
         LoggingUtil::warning("Empty linkmap", logfile);
     return linkmap;
+}
+
+unordered_set<size_t>* ParsingUtil::parseBotSet(const char *path)
+{
+    // open file
+    FILE* pFile = fopen(path, "r");
+    if (!pFile)
+    {
+        cerr << "Could not open file " << path << endl;
+        return NULL;
+    }
+    else
+        cout << "Loading bot accounts from file " << path << endl;
+    unordered_set<size_t>* botset = new unordered_set<size_t>();
+    size_t id;
+    while ((id = stoi(this->writeToString(pFile, '\n'))))
+        botset->insert(id);
+    return botset;
 }
 
 vector<int>* ParsingUtil::writeCategoryToBuffer(unordered_map<int,string>::const_iterator categoryLinks)

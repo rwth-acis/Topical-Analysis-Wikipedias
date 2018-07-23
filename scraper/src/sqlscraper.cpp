@@ -4,9 +4,11 @@
 
 #define HASHMAP_PATH "../../media/english/index-pages.txt"
 #define LINKMAP_PATH "../../media/english/jsonFiles/linkmap"
+#define BOTSET_PATH "../../media/english/botset.csv"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
 #define LINKFILE_SIZE 18137842743
+#define USERGROUP_SIZE 2027235
 
 using namespace std;
 SQLScraper::SQLScraper(const char* logfile)
@@ -124,14 +126,14 @@ int SQLScraper::splitFiles(const char *iPath, const char *oPath)
     return countFiles-1;
 }
 
-vector<vector<int>>* SQLScraper::createLinkmap(const char* fPath)
+size_t SQLScraper::createLinkmap(const char* fPath)
 {
     // load hashmap
     cout << "Loading " << HASHMAP_PATH << endl;
     unordered_map<string,int>* hashmap = parser.parseHashmap(HASHMAP_PATH);
     unordered_map<int,string>* reverse_hashmap = parser.parseReverseHashmap(HASHMAP_PATH);
     if (!hashmap)
-        return NULL;
+        return 0;
 
     // try to open file
     FILE* ipFile = fopen(fPath, "r");
@@ -139,7 +141,7 @@ vector<vector<int>>* SQLScraper::createLinkmap(const char* fPath)
     {
         cerr << "Could not open file " << fPath;
         delete hashmap;
-        return NULL;
+        return 0;
     }
     // initialize linkmap
     cout << "Reading category links from file " << fPath << endl;
@@ -164,7 +166,9 @@ vector<vector<int>>* SQLScraper::createLinkmap(const char* fPath)
             LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly at page " + to_string(id_from), logfile);
             cout << "Got " << linkmap->size() << " links" << endl;
             delete hashmap;
-            return linkmap;
+            size_t count = linkmap->size();
+            delete linkmap;
+            return count;
         }
         // get title of category
         char c;
@@ -180,7 +184,9 @@ vector<vector<int>>* SQLScraper::createLinkmap(const char* fPath)
                 LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly while reading " + titleBuffer.print(), logfile);
                 cout << "Got " << linkmap->size() << " links"  << endl;
                 delete hashmap;
-                return linkmap;
+                size_t count = linkmap->size();
+                delete linkmap;
+                return count;
             }
 
             // replace _ with spaces, dont print '\'
@@ -213,7 +219,9 @@ vector<vector<int>>* SQLScraper::createLinkmap(const char* fPath)
             cout << "Got " << linkmap->size() << " links" << endl;
             this->writeLinkmap(linkmap, LINKMAP_PATH);
             delete hashmap;
-            return linkmap;
+            size_t count = linkmap->size();
+            delete linkmap;
+            return count;
         }
 
         // get namespace of page
@@ -229,12 +237,15 @@ vector<vector<int>>* SQLScraper::createLinkmap(const char* fPath)
     cout << "Got " << linkmap->size() << " links" << endl;
     this->writeLinkmap(linkmap, LINKMAP_PATH);
     delete hashmap;
-    return linkmap;
+    size_t count = linkmap->size();
+    delete linkmap;
+    return count;
 }
 
-long SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
+void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
 {
-    short pageCount = 1;
+    size_t pageCount = 1;
+    size_t count = 0;
     string fPath = path + to_string(pageCount) + ".json";
     FILE* pFile = fopen(fPath.c_str(), "r");
     if (pFile)
@@ -246,7 +257,6 @@ long SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
         cout << "Writing file " << fPath << endl;
     pFile = fopen(fPath.c_str(), "w");
     fputc('[', pFile);
-    long count = 0;
     if (linkmap->begin() == linkmap->end())
         LoggingUtil::error("Empty linkmap", logfile);
     for (size_t i = 0; i < linkmap->size(); i++)
@@ -279,7 +289,61 @@ long SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
     fputs("\n]\n", pFile);
     fclose(pFile);
     cout << "Got " << to_string(2000000*(pageCount-1)+count) << " links in " << pageCount << " pages\n";
-    return (2000000*(pageCount-1)+count);
+    return;
+}
+
+size_t SQLScraper::createBotSet(const char *fPath)
+{
+    FILE* pFile = fopen(fPath, "r");
+    if (!pFile)
+    {
+        cerr << "Could not open file " << fPath << endl;
+        return 0;
+    }
+    else
+        cout << "Reading bots from file " << fPath << endl;
+    unordered_set<size_t>* botset = new unordered_set<size_t>();
+
+    // go to beginning of table
+    parser.findPattern(pFile, SQL_TABLE_START);
+    while (!parser.findSQLPattern(pFile, "("))
+    {
+        // get user id
+        size_t id = stoi(parser.writeToString(pFile, ','));
+        char c = fgetc(pFile);
+        if (c != '\'')
+            LoggingUtil::warning("Unexpected char " + c, logfile);
+        // get user group
+        DynamicBuffer groupBuffer = DynamicBuffer(TITLE_LENGTH);
+        groupBuffer.setMax(TITLE_LENGTH);
+        parser.writeToBuffer(pFile, &groupBuffer, '\'');
+        if (ParsingUtil::reasonableStringCompare(groupBuffer.print(), "bot"))
+            botset->insert(id);
+    }
+    this->writeBotSet(botset, BOTSET_PATH);
+    size_t count = botset->size();
+    delete botset;
+    return count;
+}
+
+void SQLScraper::writeBotSet(std::unordered_set<size_t> *botset, const char *path)
+{
+    FILE* pFile = fopen(path, "r");
+    if (pFile)
+    {
+        cout << "Overwriting file " << path << endl;
+        fclose(pFile);
+    }
+    else
+        cout << "Writing file " << path << endl;
+    pFile = fopen(path, "w");
+    if (botset->begin() == botset->end())
+        LoggingUtil::error("Empty botset", logfile);
+    for (auto it = botset->cbegin(); it != botset->end(); ++it)
+        fprintf(pFile, "%zu\n", *it);
+    fclose(pFile);
+    cout << "Got " << botset->size() << " bots\n";
+    return;
 }
 
 int SQLScraper::sqlToCSV(const char* iPath, const char* oPath)

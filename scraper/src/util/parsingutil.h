@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include "buffer.h"
 
 class ParsingUtil
@@ -43,10 +44,11 @@ public:
     std::string writeToString(FILE* ipFile, const char stopChar);
     std::string writeToString(FILE* ipFile, const std::vector<char> stopChars);
     std::string writeToString(DynamicBuffer* buffer, size_t offset, const std::vector<char> stopChars);
-    // function for parsing of a link-/hashmap stored in given path
+    // function for parsing of a link-/hashmap/botset stored in given path
     std::unordered_map<std::string,int>* parseHashmap(const char* path);
     std::unordered_map<int,std::string>* parseReverseHashmap(const char* path);
     std::unordered_map<int,std::string>* parseLinkmap(const char* path);
+    std::unordered_set<size_t>* parseBotSet(const char* path);
     // function for reading categories to list from string
     std::vector<int>* writeCategoryToBuffer(std::unordered_map<int,std::string>::const_iterator categoryLinks);
 

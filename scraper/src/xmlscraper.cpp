@@ -11,6 +11,7 @@
 #define PAGES_PATH "../../media/english/jsonFiles/pages"
 #define HISTORY_INPUT(x) "../../media/english/rawFiles/history/enwiki-latest-pages-meta-history" + to_string(x) + ".xml"
 #define HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
+#define BOTSET "../../media/english/botset.csv"
 // sizes for progress estimation
 #define INDEX_SIZE 502047972
 #define HISTORY_SIZE 76873861874
@@ -38,7 +39,8 @@
 #define DISAMBIGUATION 19204864
 #define WIKIPEDIA_TEMPLATES 44084293 // not considered in current version of DB
 // xml tags
-#define PAGE "<page>"
+#define PAGE_START "<page>"
+#define PAGE_END "</page>"
 #define TITLE "<title>"
 #define ID "<id>"
 #define REVISION "<revision>"
@@ -49,6 +51,7 @@
 #define BODY_START "<text"
 #define BODY_END "</text>"
 #define SHA_TAG "<sha1>"
+#define NAMESPACE "<ns>"
 
 using namespace std;
 XMLScraper::XMLScraper(const char* logfile)
@@ -261,14 +264,15 @@ size_t XMLScraper::historyToCSV(short fileNr)
     opFile = fopen(fPath.c_str(), "w");
     fclose(opFile);
 
-    // buffer with hashes of revisions
+    // buffer with hashes of revisions + get bots
     unordered_set<string>* revHashes = new unordered_set<string>;
+    unordered_set<size_t>* botset = parser.parseBotSet(BOTSET);
 
     // go to beginning of page or next revision
     size_t count = 0, pageId, prevSize = 0;
     short prog = 0, res;
     DynamicBuffer titleBuffer = DynamicBuffer(LARGE_BACKLOG);
-    while ((res = parser.findPattern(ipFile, PAGE, REVISION)))
+    while ((res = parser.findPattern(ipFile, PAGE_START, REVISION)))
     {
         // compute progress indicator
         if (((ftell(ipFile)*20)/HISTORY_SIZE) > prog || (HISTORY_SIZE - ftell(ipFile) < ACTUAL_BUFFER_LIMIT && prog < 20))
@@ -296,6 +300,11 @@ size_t XMLScraper::historyToCSV(short fileNr)
             parser.findPattern(ipFile, ID);
             pageId = stoi(parser.writeToString(ipFile, '<'));
             //cout << "pageId: " << pageId << ", title: " << titleBuffer.print() << endl;
+
+            // check namespace (go to next page if no article)
+            parser.findPattern(ipFile, NAMESPACE);
+            if (stoi(parser.writeToString(ipFile, '<')))
+                parser.findPattern(ipFile, PAGE_END);
             continue;
         }
         // got next revision
@@ -326,8 +335,6 @@ size_t XMLScraper::historyToCSV(short fileNr)
             // check if contributor is user
             if (!parser.searchPattern(&contBuffer, ID))
                 continue;
-            // check if contributor is bot
-            // TODO
             // get user information
             size_t userId;
             DynamicBuffer username = DynamicBuffer(TITLE_LENGTH);
@@ -363,6 +370,9 @@ size_t XMLScraper::historyToCSV(short fileNr)
                 }
                 userId = stoi(idString);
             }
+            // check if contributor is bot
+            if (botset->find(userId) != botset->end())
+                continue;
             //cout << "userId: " << userId << ", username: " << username.print() << ", ";
             // get size of contribution
             parser.findPattern(ipFile, BODY_START);
@@ -395,5 +405,6 @@ size_t XMLScraper::historyToCSV(short fileNr)
     }
     cout << "Got " << count << " revisions" << endl;
     delete revHashes;
+    delete botset;
     return count;
 }
