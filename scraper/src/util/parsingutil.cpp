@@ -284,20 +284,30 @@ long ParsingUtil::countChars(FILE *ipFile, const string stopStr)
 {
     char c;
     size_t state = 0;
-    size_t count = 0;
+    long count = 0;
+    bool deletion = false, newLine = true;
     while ((c = fgetc(ipFile)) != EOF)
     {
+        if (c == '-' && newLine)
+            deletion = true;
         if (c == (char) toupper(stopStr[state]) || c == (char) tolower(stopStr[state]))
             state++;
         else
             state = 0;
-
-        count++;
         if (state >= stopStr.size())
             return count - state;
+        if (deletion && !(newLine && c == '-'))
+            count--;
+        else
+            count++;
+        if (c == '\n')
+        {
+            deletion = false;
+            newLine = true;
+        }
     }
 
-    return -1*count;
+    return 0;
 }
 
 int ParsingUtil::writeToFile(FILE *ipFile, FILE *opFile, const string stopStr)
@@ -368,6 +378,43 @@ int ParsingUtil::writeSQLToFile(FILE *ipFile, FILE *opFile,  const string stopSt
             p = c;
     }
     return -1;
+}
+
+int ParsingUtil::writeEscapedToBuffer(FILE* ipFile, DynamicBuffer* buffer, const char stopChar)
+{
+    char c;
+    size_t initSize = buffer->size();
+    int endSize = 0;
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == stopChar)
+        {
+            // print warning if buffer had to be extended
+            if (endSize > initSize && logging)
+                LoggingUtil::warning("Buffer had to be extended for content: " + buffer->print(), logfile);
+            return 1;
+        }
+
+        // escape quote and backslash
+        if (c == '\"' || c == '\\')
+        {
+            if (buffer->write('\\') < 0)
+            {
+                // print error to logfile
+                if (logging)
+                    LoggingUtil::error("Buffer exceeded maximum size! Stopped parsing\n" + buffer->print(), logfile);
+                return -1;
+            }
+        }
+        if ((endSize = buffer->write(c)) < 0)
+        {
+            // print error to logfile
+            if (logging)
+                LoggingUtil::error("Buffer exceeded maximum size! Stopped parsing\n" + buffer->print(), logfile);
+            return -1;
+        }
+    }
+    return 0;
 }
 
 int ParsingUtil::writeToBuffer(FILE *ipFile, DynamicBuffer* buffer, const string stopStr)
@@ -647,7 +694,7 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
     return linkmap;
 }
 
-unordered_set<size_t>* ParsingUtil::parseBotSet(const char *path)
+unordered_set<string>* ParsingUtil::parseBotSet(const char *path)
 {
     // open file
     FILE* pFile = fopen(path, "r");
@@ -658,10 +705,10 @@ unordered_set<size_t>* ParsingUtil::parseBotSet(const char *path)
     }
     else
         cout << "Loading bot accounts from file " << path << endl;
-    unordered_set<size_t>* botset = new unordered_set<size_t>();
-    size_t id;
-    while ((id = stoi(this->writeToString(pFile, '\n'))))
-        botset->insert(id);
+    unordered_set<string>* botset = new unordered_set<string>();
+    string name;
+    while ((name = this->writeToString(pFile, '\n')) != "0")
+        botset->insert(name);
     return botset;
 }
 

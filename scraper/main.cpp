@@ -32,7 +32,7 @@ static struct option options[] = {
     {"scrape", no_argument, NULL, 's'},
     {"linkmap", no_argument, NULL, 'i'},
     {"botset", no_argument, NULL, 'b'},
-    {"history", no_argument, NULL, 'h'},
+    {"history", required_argument, NULL, 'h'},
     {0, 0, 0, 0}
 };
 
@@ -45,7 +45,7 @@ int main(int argc, char* argv[])
     // find out what to do
     char opt;
     string input;
-    while ((opt = getopt_long(argc, argv, "lsibh", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "lsibh;", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -69,8 +69,6 @@ int main(int argc, char* argv[])
             break;
         // parse articles
         case 's':
-            cout << "Hello, I am a nervous wreck at this point and hope I don't explode your RAM\n"
-                    "If that should happen, please note: ...sorry\n";
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
             scraper->scrapePages();
@@ -86,9 +84,34 @@ int main(int argc, char* argv[])
             otherScraper->createBotSet(SQL_USERS_PATH);
             break;
         case 'h':
+            short fileNr = 0;
+            if (!optarg)
+            {
+                input = "";
+                cout << "Hello, I am your cool parsing program and enjoy parsing history files!\n"
+                        "However, this is a bit much information to get through all at once, so you'll "
+                        "have to tell me which file I should get to parsing" << endl;
+                while (!fileNr)
+                {
+                    cin >> input;
+                    try {
+                        fileNr = stoi(input);}
+                    catch (const invalid_argument) {
+                        cout << "Hm... I seem to be unable to convert your input into a number.\n"
+                                "I'm sure you just mistyped, try again" << endl;}
+                }
+            }
+            else
+            {
+                try {
+                    fileNr = stoi(input);}
+                catch (const invalid_argument) {
+                    cout << "Hm... I seem to be unable to convert your input into a number.\n"
+                            "I'm sure you just mistyped, try again" << endl;}
+            }
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
-            scraper->historyToCSV(0);
+            scraper->historyToCSV(fileNr);
             break;
     }
     return 0;

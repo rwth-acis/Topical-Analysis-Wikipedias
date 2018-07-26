@@ -11,7 +11,7 @@
 #define PAGES_PATH "../../media/english/jsonFiles/pages"
 #define HISTORY_INPUT(x) "../../media/english/rawFiles/history/enwiki-latest-pages-meta-history" + to_string(x) + ".xml"
 #define HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
-#define BOTSET "../../media/english/botset.csv"
+#define BOTSET "../../media/english/csvFiles/bots.csv"
 // sizes for progress estimation
 #define INDEX_SIZE 502047972
 #define HISTORY_SIZE 76873861874
@@ -52,6 +52,7 @@
 #define BODY_END "</text>"
 #define SHA_TAG "<sha1>"
 #define NAMESPACE "<ns>"
+#define MINOR "<minor />"
 
 using namespace std;
 XMLScraper::XMLScraper(const char* logfile)
@@ -262,16 +263,18 @@ size_t XMLScraper::historyToCSV(short fileNr)
     else
         cout << "Creating output file for history at " << fPath << endl;
     opFile = fopen(fPath.c_str(), "w");
+    fputs("\"_key\", \"_to\", \"page_title\", \"_from\", \"user_name\", \"timestamp\"\n", opFile);
     fclose(opFile);
 
     // buffer with hashes of revisions + get bots
     unordered_set<string>* revHashes = new unordered_set<string>;
-    unordered_set<size_t>* botset = parser.parseBotSet(BOTSET);
+    unordered_set<string>* botset = parser.parseBotSet(BOTSET);
 
     // go to beginning of page or next revision
-    size_t count = 0, pageId, prevSize = 0;
+    size_t count = 0, pageId;
     short prog = 0, res;
     DynamicBuffer titleBuffer = DynamicBuffer(LARGE_BACKLOG);
+    titleBuffer.setMax(MAX_BUFFER_SIZE);
     while ((res = parser.findPattern(ipFile, PAGE_START, REVISION)))
     {
         // compute progress indicator
@@ -286,25 +289,24 @@ size_t XMLScraper::historyToCSV(short fileNr)
             // flush hash/title buffer
             revHashes->clear();
             titleBuffer.flush();
-            prevSize = 0;
 
             // get title
-            titleBuffer.setMax(MAX_BUFFER_SIZE);
             parser.findPattern(ipFile, TITLE);
-            if (parser.writeToBuffer(ipFile, &titleBuffer, '<') == -1)
+            if (parser.writeEscapedToBuffer(ipFile, &titleBuffer, '<') == -1)
             {
                 cerr << "Max buffer size exceeded";
                 return count;
             }
-            // get pageId
-            parser.findPattern(ipFile, ID);
-            pageId = stoi(parser.writeToString(ipFile, '<'));
-            //cout << "pageId: " << pageId << ", title: " << titleBuffer.print() << endl;
-
             // check namespace (go to next page if no article)
             parser.findPattern(ipFile, NAMESPACE);
             if (stoi(parser.writeToString(ipFile, '<')))
+            {
                 parser.findPattern(ipFile, PAGE_END);
+                continue;
+            }
+            // get pageId
+            parser.findPattern(ipFile, ID);
+            pageId = stoi(parser.writeToString(ipFile, '<'));
             continue;
         }
         // got next revision
@@ -352,7 +354,11 @@ size_t XMLScraper::historyToCSV(short fileNr)
                         writingId = false;
                     }
                     if (writingName)
+                    {
+                        if (c == '\\' || c == '\"')
+                            username.write('\\');
                         username.write(c);
+                    }
                     if (writingId)
                         idString += c;
                     if (c == name[nameState])
@@ -370,19 +376,21 @@ size_t XMLScraper::historyToCSV(short fileNr)
                 }
                 userId = stoi(idString);
             }
-            // check if contributor is bot
-            if (botset->find(userId) != botset->end())
+            // userId should not be 0
+            if (!userId)
+            {
+                LoggingUtil::warning("User ID equals 0 for user " + username.print(), logfile);
                 continue;
-            //cout << "userId: " << userId << ", username: " << username.print() << ", ";
-            // get size of contribution
-            parser.findPattern(ipFile, BODY_START);
+            }
+            // check if contributor is bot
+            if (botset->find(username.print()) != botset->end())
+                continue;
+            // check for minor tag
+            if (parser.findPattern(ipFile, BODY_START, MINOR) == 2)
+                continue;
             parser.findPattern(ipFile, ">");
-            size_t bodySize = parser.countChars(ipFile, BODY_END);
-            size_t contSize = (((int) bodySize - (int) prevSize) < 0) ? 0 : bodySize - prevSize;
-            prevSize = bodySize;
-            //cout << "size: " << contSize << ", ";
 
-            // check for revision
+            // check for reversion
             parser.findPattern(ipFile, SHA_TAG);
             DynamicBuffer shaBuffer = DynamicBuffer(SHA1_LENGTH);
             shaBuffer.setMax(SHA1_LENGTH);
@@ -393,12 +401,11 @@ size_t XMLScraper::historyToCSV(short fileNr)
             }
             if (revHashes->find(shaBuffer.print()) != revHashes->end())
                 continue;
-            //cout << "sha1: " << shaBuffer.print() << endl;
             // print revision
             revHashes->insert(shaBuffer.print());
             fPath = HISTORY_OUTPUT(fileNr);
             opFile = fopen(fPath.c_str(), "a");
-            fprintf(opFile, "%zu, %zu,\"%s\",%zu,\"%s\",%zu,\"%s\"\n", revisionId, pageId, titleBuffer.raw(), userId, username.raw(), contSize, timestampBuffer.raw());
+            fprintf(opFile, "\"%zu\",\"enPages/%zu\",\"%s\",\"enAuthors/%zu\",\"%s\",\"%s\"\n", revisionId, pageId, titleBuffer.raw(), userId, username.raw(), timestampBuffer.raw());
             fclose(opFile);
             count++;
         }
