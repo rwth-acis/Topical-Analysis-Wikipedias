@@ -33,6 +33,7 @@ static struct option options[] = {
     {"linkmap", no_argument, NULL, 'i'},
     {"botset", no_argument, NULL, 'b'},
     {"history", required_argument, NULL, 'h'},
+    {"authors", no_argument, NULL, 'a'},
     {0, 0, 0, 0}
 };
 
@@ -45,7 +46,7 @@ int main(int argc, char* argv[])
     // find out what to do
     char opt;
     string input;
-    while ((opt = getopt_long(argc, argv, "lsibh;", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "lsibh;a", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -84,6 +85,7 @@ int main(int argc, char* argv[])
             otherScraper->createBotSet(SQL_USERS_PATH);
             break;
         case 'h':
+        {
             short fileNr = 0;
             if (!optarg)
             {
@@ -112,6 +114,12 @@ int main(int argc, char* argv[])
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
             scraper->historyToCSV(fileNr);
+            break;
+        }
+        case 'a':
+            if (!scraper)
+                scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
+            scraper->getAuthors();
             break;
     }
     return 0;

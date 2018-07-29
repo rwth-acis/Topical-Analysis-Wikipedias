@@ -26,6 +26,9 @@ public:
     // revisionId,pageId,title,userId,username,size,timestamp
     // users without username/id and bots are excluded
     size_t historyToCSV(short fileNr);
+    // creates a CSV file with entries for each author within the history files
+    // each author is only added once (identified by contributor ID)
+    size_t getAuthors();
 
 private:
 

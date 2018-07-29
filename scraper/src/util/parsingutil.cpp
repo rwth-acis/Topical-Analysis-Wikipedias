@@ -37,9 +37,9 @@ int ParsingUtil::findPattern(FILE *ipFile, const string stopStr)
             state = 0;
 
         if (state >= stopStr.size())
-            return 0;
+            return state;
     }
-    return -1;
+    return 0;
 }
 
 bool ParsingUtil::searchPattern(DynamicBuffer* buffer, const string stopStr)
@@ -552,7 +552,7 @@ string ParsingUtil::writeToString(DynamicBuffer* buffer, size_t offset, const ve
 unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
 {
     // open file
-    FILE* ipFile = LoggingUtil::warning(path, false);
+    FILE* ipFile = LoggingUtil::openFile(path, false);
     if (!ipFile)
         return NULL;
 

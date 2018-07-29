@@ -11,7 +11,7 @@
 #define PAGES_PATH "../../media/english/jsonFiles/pages"
 #define HISTORY_INPUT(x) "../../media/english/compressedFiles/history/enwiki-20180701-pages-meta-history" + to_string(x) + ".xml"
 #define HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
-#define AUTHOR_OUTPUT(x) "../../media/english/csvFiles/authors" + to_string(x) + ".csv"
+#define AUTHOR_OUTPUT "../../media/english/csvFiles/authors.csv"
 #define BOTSET "../../media/english/csvFiles/bots.csv"
 // sizes for progress estimation
 #define INDEX_SIZE 502047972
@@ -385,13 +385,37 @@ size_t XMLScraper::historyToCSV(short fileNr)
     return count;
 }
 
-size_t XMLScraper::getAuthors(short fileNr)
+size_t XMLScraper::getAuthors()
 {
-    string fPath = HISTORY_OUTPUT(fileNr);
-    FILE* ipFile = LoggingUtil::openFile(fPath, false);
-    if (!ipFile)
-        return 0;
-    fPath = AUTHOR_OUTPUT(fileNr);
-    FILE* opFile = LoggingUtil::openFile(fPath, true);
-
+    size_t count = 0;
+    FILE* opFile = LoggingUtil::openFile(AUTHOR_OUTPUT, true);
+    fputs("_key,username\n", opFile);
+    fclose(opFile);
+    unordered_map<int,string>* authors = new unordered_map<int, string>();
+    for (short fileNr = 1; fileNr <= 27; fileNr++)
+    {
+        string fPath = HISTORY_OUTPUT(fileNr);
+        FILE* ipFile = LoggingUtil::openFile(fPath, false);
+        if (!ipFile)
+            return 0;
+        cout << "Reading input file " << fileNr << "/27\n";
+        while (parser.findPattern(ipFile, "enAuthors/"))
+        {
+            int id = stoi(parser.writeToString(ipFile, '\"'));
+            if (authors->find(id) != authors->end())
+                continue;
+            if (!parser.findPattern(ipFile, "\""))
+            {
+                LoggingUtil::warning("File " + fPath + " ended unexpectedly");
+                return count;
+            }
+            string name = parser.writeToString(ipFile, '\"');
+            opFile = fopen(AUTHOR_OUTPUT, "a");
+            fprintf(opFile, "\"%d\",\"%s\"\n", id, name.c_str());
+            fclose(opFile);
+            authors->insert({id,name});
+            count++;
+        }
+    }
+    return count;
 }

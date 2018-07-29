@@ -39,8 +39,6 @@ public:
         fputc('\n', pFile);
         fclose(pFile);
     }
-
-
     static FILE* openFile(std::string path, bool write)
     {
         // open output file
@@ -51,19 +49,45 @@ public:
             if (pFile)
             {
                 // overwrite existing file
-                cout << "Overwriting file " << path << endl;
+                std::cout << "Overwriting file " << path << std::endl;
                 fclose(pFile);
             }
             else
                 // create new output file
-                cout << "Creating output file " << path << endl;
+                std::cout << "Creating output file " << path << std::endl;
             pFile = fopen(path.c_str(), "w");
         }
         else
         {
             pFile = fopen(path.c_str(), "r");
-            if (!ipFile)
-                cerr << "Could not open file " << fPath << endl;
+            if (!pFile)
+                std::cerr << "Could not open file " << path << std::endl;
+        }
+        return pFile;
+    }
+    static FILE* openFile(const char* path, bool write)
+    {
+        // open output file
+        FILE* pFile;
+        if (write)
+        {
+            pFile = fopen(path, "r");
+            if (pFile)
+            {
+                // overwrite existing file
+                std::cout << "Overwriting file " << path << std::endl;
+                fclose(pFile);
+            }
+            else
+                // create new output file
+                std::cout << "Creating output file " << path << std::endl;
+            pFile = fopen(path, "w");
+        }
+        else
+        {
+            pFile = fopen(path, "r");
+            if (!pFile)
+                std::cerr << "Could not open file " << path << std::endl;
         }
         return pFile;
     }
