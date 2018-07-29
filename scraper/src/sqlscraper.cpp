@@ -148,26 +148,23 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
 {
     size_t pageCount = 1;
     size_t count = 0;
-    string fPath = path + to_string(pageCount) + ".json";
+    string fPath = path + to_string(pageCount) + ".csv";
     FILE* pFile = LoggingUtil::openFile(path, true);
-    fputc('[', pFile);
+    fputs("_from,_to,type\n", pFile);
     if (linkmap->begin() == linkmap->end())
         LoggingUtil::error("Empty linkmap", logfile);
     for (size_t i = 0; i < linkmap->size(); i++)
     {
-        if (count)
-            fputs(",", pFile);
-        fprintf(pFile, "\n{\"_from\":\"enPages/%d\",\"_to\":\"enPages/%d\",\"type\":\"%d\"}", linkmap->at(i)[0], linkmap->at(i)[1], linkmap->at(i)[2]);
+        fprintf(pFile, "\"enPages/%d\",\"enPages/%d\",\"%d\"\n", linkmap->at(i)[0], linkmap->at(i)[1], linkmap->at(i)[2]);
         count++;
 
-        // after 2million links open new file
-        if (count >= 2000000)
+        // after 1million links open new file
+        if (count >= 1000000)
         {
-            fputs("\n]\n", pFile);
             fclose(pFile);
             pageCount++;
             count = 0;
-            fPath = path + to_string(pageCount) + ".json";
+            fPath = path + to_string(pageCount) + ".csv";
             pFile = fopen(fPath.c_str(), "r");
             if (pFile)
             {
@@ -177,12 +174,11 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
             else
                 cout << "Writing file " << fPath << endl;
             pFile = fopen(fPath.c_str(), "w");
-            fputc('[', pFile);
+            fputs("_from,_to,type\n", pFile);
         }
     }
-    fputs("\n]\n", pFile);
     fclose(pFile);
-    cout << "Got " << to_string(2000000*(pageCount-1)+count) << " links in " << pageCount << " pages\n";
+    cout << "Got " << to_string(1000000*(pageCount-1)+count) << " links in " << pageCount << " pages\n";
     return;
 }
 
