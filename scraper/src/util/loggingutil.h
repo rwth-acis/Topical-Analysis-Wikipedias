@@ -39,6 +39,34 @@ public:
         fputc('\n', pFile);
         fclose(pFile);
     }
+
+
+    static FILE* openFile(std::string path, bool write)
+    {
+        // open output file
+        FILE* pFile;
+        if (write)
+        {
+            pFile = fopen(path.c_str(), "r");
+            if (pFile)
+            {
+                // overwrite existing file
+                cout << "Overwriting file " << path << endl;
+                fclose(pFile);
+            }
+            else
+                // create new output file
+                cout << "Creating output file " << path << endl;
+            pFile = fopen(path.c_str(), "w");
+        }
+        else
+        {
+            pFile = fopen(path.c_str(), "r");
+            if (!ipFile)
+                cerr << "Could not open file " << fPath << endl;
+        }
+        return pFile;
+    }
 };
 
 #endif // LOGGINGUTIL_H

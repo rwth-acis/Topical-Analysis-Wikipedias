@@ -552,12 +552,9 @@ string ParsingUtil::writeToString(DynamicBuffer* buffer, size_t offset, const ve
 unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
 {
     // open file
-    FILE* ipFile = fopen(path, "r");
+    FILE* ipFile = LoggingUtil::warning(path, false);
     if (!ipFile)
-    {
-        cerr << "Could not open file " << path << endl;
         return NULL;
-    }
 
     unordered_map<string,int>* hashmap = new unordered_map<string,int>();
     // get id
@@ -601,12 +598,9 @@ unordered_map<string,int>* ParsingUtil::parseHashmap(const char* path)
 unordered_map<int,string>* ParsingUtil::parseReverseHashmap(const char* path)
 {
     // open file
-    FILE* ipFile = fopen(path, "r");
+    FILE* ipFile = LoggingUtil::openFile(path, false);
     if (!ipFile)
-    {
-        cerr << "Could not open file " << path << endl;
         return NULL;
-    }
     unordered_map<int,string>* hashmap = new unordered_map<int,string>();
     // get id
     int id = 0, prog = 0;
@@ -657,12 +651,9 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
     {
         // open file
         string fPath = path + to_string(i) + ".json";
-        FILE* ipFile = fopen(fPath.c_str(), "r");
+        FILE* ipFile = LoggingUtil::openFile(fPath, false);
         if (!ipFile)
-        {
-            cerr << "Could not open file " << fPath << endl;
             return NULL;
-        }
         cout << "Reading file " << i << "/31" << endl;
         while (!(this->findPattern(ipFile, FROM)))
         {
@@ -697,12 +688,9 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
 unordered_set<string>* ParsingUtil::parseBotSet(const char *path)
 {
     // open file
-    FILE* pFile = fopen(path, "r");
+    FILE* pFile = LoggingUtil::openFile(path, false);
     if (!pFile)
-    {
-        cerr << "Could not open file " << path << endl;
         return NULL;
-    }
     else
         cout << "Loading bot accounts from file " << path << endl;
     unordered_set<string>* botset = new unordered_set<string>();

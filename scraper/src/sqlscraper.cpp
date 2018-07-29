@@ -29,103 +29,6 @@ SQLScraper::SQLScraper(const char *ownLogfile, const char* parserLogfile)
     fclose(pFile);
 }
 
-int SQLScraper::makeReadable(const char* iPath, const char* oPath, int numAttributes)
-{
-    // open input file
-    FILE* ipFile = fopen(iPath, "r");
-    if (!ipFile)
-    {
-        cerr << "Could not open file " << iPath << endl;
-        return -1;
-    }
-
-    // open output file
-    FILE* opFile = fopen(oPath, "r");
-    if (opFile)
-    {
-        cout << "Overwriting file " << oPath << endl;
-        fclose(opFile);
-    }
-    else
-        cout << "Creating output file " << oPath << endl;
-    opFile = fopen(oPath, "w");
-
-    // set file pointer to beginning of entries
-    if (parser.findPattern(ipFile, "VALUES") == -1)
-        cout << "File ended unexpectedly" << endl;
-
-    // set line breaks after end of entry
-    // end of entry is defined if numEntries
-    // attributes have been passed
-    int count = 0, commaCount = 0;
-    char c, p = '0';
-    bool inQuotes = false;
-    while ((c = fgetc(ipFile)) != EOF)
-    {
-        fputc(c, opFile);
-        // check for single quotes
-        if (c == '\'' && p != '\\')
-            inQuotes = !inQuotes;
-        // commas only count outside of quotes
-        if (c == ',' && !inQuotes)
-            commaCount++;
-        // brackets outside of quotes reset counter
-        if ((c == ')' || c == '(')  && p != '\\' && !inQuotes && commaCount < numAttributes-1)
-            commaCount = 0;
-        if (commaCount >= numAttributes-1)
-        {
-            // get to end of entry
-            if (parser.writeSQLToFile(ipFile, opFile, "),") == -1)
-                cout << "File ended unexpectedly" << endl;
-            // insert line break, reset comma counter
-            fputc('\n', opFile);
-            count++;
-            commaCount = 0;
-        }
-        p = c;
-    }
-    fclose(opFile);
-    return count;
-}
-
-int SQLScraper::splitFiles(const char *iPath, const char *oPath)
-{
-    // open input file
-    FILE* ipFile = fopen(iPath, "r");
-    if (!ipFile)
-    {
-        cerr << "Could not open file " << iPath << endl;
-        return -1;
-    }
-
-    int countFiles = 1;
-    while (!parser.findPattern(ipFile, "VALUES"))
-    {
-        // open output file
-        string ofPath = string(oPath) + '(' + to_string(countFiles) + ").txt";
-        FILE* opFile = fopen(ofPath.c_str(), "r");
-        if (opFile)
-        {
-            cout << "Overwriting file " << ofPath << endl;
-            fclose(opFile);
-        }
-        else
-            cout << "Creating output file " << oPath << endl;
-        opFile = fopen(ofPath.c_str(), "w");
-
-        // write until semicolon
-        if (parser.writeToFile(ipFile, opFile, ");") == -1)
-        {
-            cout << "File " << iPath << " ended unexpectedly" << endl;
-            fclose(opFile);
-            return -countFiles;
-        }
-        countFiles++;
-        fclose(opFile);
-    }
-    return countFiles-1;
-}
-
 size_t SQLScraper::createLinkmap(const char* fPath)
 {
     // load hashmap
@@ -136,10 +39,9 @@ size_t SQLScraper::createLinkmap(const char* fPath)
         return 0;
 
     // try to open file
-    FILE* ipFile = fopen(fPath, "r");
+    FILE* ipFile = LoggingUtil::openFile(fPath, false);
     if (!ipFile)
     {
-        cerr << "Could not open file " << fPath;
         delete hashmap;
         return 0;
     }
@@ -247,15 +149,7 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
     size_t pageCount = 1;
     size_t count = 0;
     string fPath = path + to_string(pageCount) + ".json";
-    FILE* pFile = fopen(fPath.c_str(), "r");
-    if (pFile)
-    {
-        cout << "Overwriting file " << fPath << endl;
-        fclose(pFile);
-    }
-    else
-        cout << "Writing file " << fPath << endl;
-    pFile = fopen(fPath.c_str(), "w");
+    FILE* pFile = LoggingUtil::openFile(path, true);
     fputc('[', pFile);
     if (linkmap->begin() == linkmap->end())
         LoggingUtil::error("Empty linkmap", logfile);
@@ -294,12 +188,9 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
 
 size_t SQLScraper::createBotSet(const char *fPath)
 {
-    FILE* pFile = fopen(fPath, "r");
+    FILE* pFile = LoggingUtil::openFile(fPath, false);
     if (!pFile)
-    {
-        cerr << "Could not open file " << fPath << endl;
         return 0;
-    }
     else
         cout << "Reading bots from file " << fPath << endl;
     unordered_set<size_t>* botset = new unordered_set<size_t>();
@@ -328,14 +219,7 @@ size_t SQLScraper::createBotSet(const char *fPath)
 
 void SQLScraper::writeBotSet(std::unordered_set<size_t> *botset, const char *path)
 {
-    FILE* pFile = fopen(path, "r");
-    if (pFile)
-    {
-        cout << "Overwriting file " << path << endl;
-        fclose(pFile);
-    }
-    else
-        cout << "Writing file " << path << endl;
+    FILE* pFile = LoggingUtil::openFile(path, true);
     pFile = fopen(path, "w");
     if (botset->begin() == botset->end())
         LoggingUtil::error("Empty botset", logfile);
@@ -348,22 +232,10 @@ void SQLScraper::writeBotSet(std::unordered_set<size_t> *botset, const char *pat
 
 int SQLScraper::sqlToCSV(const char* iPath, const char* oPath)
 {
-    FILE* ipFile = fopen(iPath, "r");
-    FILE* opFile = fopen(oPath, "r");
+    FILE* ipFile = LoggingUtil::openFile(iPath, false);
     if (!ipFile)
-    {
-        cerr << "Could not open file " << iPath << endl;
-        fclose(opFile);
         return -1;
-    }
-    if (opFile)
-    {
-        cout << "Overwriting file " << oPath << endl;
-        fclose(opFile);
-    }
-    else
-        cout << "Writing to file " << oPath << endl;
-    opFile = fopen(oPath, "w");
+    FILE* opFile = LoggingUtil::openFile(oPath, true);
     char c;
     while ((c = fgetc(ipFile)) != EOF)
         fputc(c, opFile);

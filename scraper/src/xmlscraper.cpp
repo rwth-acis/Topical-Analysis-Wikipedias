@@ -9,8 +9,9 @@
 #define INDEX_PATH "../../media/english/index-pages.txt"
 #define LINKMAP_PATH "../../media/english/jsonFiles/linkmap"
 #define PAGES_PATH "../../media/english/jsonFiles/pages"
-#define HISTORY_INPUT(x) "../../media/english/rawFiles/history/enwiki-latest-pages-meta-history" + to_string(x) + ".xml"
+#define HISTORY_INPUT(x) "../../media/english/compressedFiles/history/enwiki-20180701-pages-meta-history" + to_string(x) + ".xml"
 #define HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
+#define AUTHOR_OUTPUT(x) "../../media/english/csvFiles/authors" + to_string(x) + ".csv"
 #define BOTSET "../../media/english/csvFiles/bots.csv"
 // sizes for progress estimation
 #define INDEX_SIZE 502047972
@@ -82,13 +83,9 @@ XMLScraper::XMLScraper(const char* parserLogging, const char* ownLogging)
 size_t XMLScraper::scrapePages()
 {
     // get index file
-    FILE* ipFile = fopen(INDEX_PATH, "r");
+    FILE* ipFile = LoggingUtil::openFile(INDEX_PATH, false);
     if (!ipFile)
-    {
-        cerr << "Could not open file " INDEX_PATH << endl;
         return 0;
-    }
-    fclose(ipFile);
 
     // load linkmap
     cout << "Load linkmap from " << LINKMAP_PATH << endl;
@@ -102,19 +99,10 @@ size_t XMLScraper::scrapePages()
     // create output files
     short fileCount = 1;
     string fPath = PAGES_PATH + to_string(fileCount) + ".json";
-    FILE* opFile = fopen(fPath.c_str(), "r");
-    if (opFile)
-    {
-        cout << "Overwriting file " << fPath << endl;
-        fclose(opFile);
-    }
-    else
-        cout << "Creating output file for pages at " << fPath << endl;
-    opFile = fopen(fPath.c_str(), "w");
+    FILE* opFile = LoggingUtil::openFile(fPath, true);
     fputc('[', opFile);
     fclose(opFile);
 
-    ipFile = fopen(INDEX_PATH, "r");
     // buffer line
     DynamicBuffer lineBuffer(LARGE_BACKLOG);
     lineBuffer.setMax(MAX_BUFFER_SIZE);
@@ -186,15 +174,7 @@ size_t XMLScraper::scrapePages()
             fclose(opFile);
             fileCount++;
             fPath = PAGES_PATH + to_string(fileCount) + ".json";
-            opFile = fopen(fPath.c_str(), "r");
-            if (opFile)
-            {
-                cout << "Overwriting file " << fPath << endl;
-                fclose(opFile);
-            }
-            else
-                cout << "Creating output file for pages at " << fPath << endl;
-            opFile = fopen(fPath.c_str(), "w");
+            opFile = LoggingUtil::openFile(fPath, true);
             fputc('[', opFile);
             fclose(opFile);
         }
@@ -245,25 +225,14 @@ size_t XMLScraper::historyToCSV(short fileNr)
 {
     // get index file
     string fPath = HISTORY_INPUT(fileNr);
-    FILE* ipFile = fopen(fPath.c_str(), "r");
+    FILE* ipFile = LoggingUtil::openFile(fPath, false);
     if (!ipFile)
-    {
-        cerr << "Could not open file " << fPath << endl;
         return 0;
-    }
 
     // create output file
     fPath = HISTORY_OUTPUT(fileNr);
-    FILE* opFile = fopen(fPath.c_str(), "r");
-    if (opFile)
-    {
-        cout << "Overwriting file " << fPath << endl;
-        fclose(opFile);
-    }
-    else
-        cout << "Creating output file for history at " << fPath << endl;
-    opFile = fopen(fPath.c_str(), "w");
-    fputs("\"_key\", \"_to\", \"page_title\", \"_from\", \"user_name\", \"timestamp\"\n", opFile);
+    FILE* opFile = LoggingUtil::openFile(fPath, true);
+    fputs("_key,_to,page_title,_from,user_name,timestamp\n", opFile);
     fclose(opFile);
 
     // buffer with hashes of revisions + get bots
@@ -414,4 +383,15 @@ size_t XMLScraper::historyToCSV(short fileNr)
     delete revHashes;
     delete botset;
     return count;
+}
+
+size_t XMLScraper::getAuthors(short fileNr)
+{
+    string fPath = HISTORY_OUTPUT(fileNr);
+    FILE* ipFile = LoggingUtil::openFile(fPath, false);
+    if (!ipFile)
+        return 0;
+    fPath = AUTHOR_OUTPUT(fileNr);
+    FILE* opFile = LoggingUtil::openFile(fPath, true);
+
 }
