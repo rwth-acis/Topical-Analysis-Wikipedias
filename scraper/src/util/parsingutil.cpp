@@ -1,9 +1,7 @@
 #include "parsingutil.h"
-#include "loggingutil.h"
 #include <unordered_set>
 // JSON TAGS
-#define FROM "\"_from\":\"enPages/"
-#define TO "\"_to\":\"enPages/"
+#define ENPAGES "enPages/"
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
@@ -642,39 +640,48 @@ unordered_map<int,string>* ParsingUtil::parseReverseHashmap(const char* path)
 
 unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
 {
-    vector<char> stopChars = { '\"' };
+    // count number of files
+    short fileNr = 1;
+    string fPath = path + to_string(fileNr) + ".csv";
+    FILE* ipFile;
+    while ((ipFile = fopen(fPath.c_str(), "r")))
+    {
+        fileNr++;
+        fclose(ipFile);
+        fPath = path + to_string(fileNr) + ".csv";
+    }
+    fileNr--;
     unordered_map<int,string>* linkmap = new unordered_map<int,string>();
     size_t cur_id = 0, prev_id = 0, count = 0;;
     bool first = true;
     string catBuffer = "";
-    for (int i = 1; i <= 31; i++)
+    for (int i = 1; i <= fileNr; i++)
     {
         // open file
-        string fPath = path + to_string(i) + ".json";
-        FILE* ipFile = LoggingUtil::openFile(fPath, false);
+        fPath = path + to_string(i) + ".csv";
+        ipFile = LoggingUtil::openFile(fPath, false);
         if (!ipFile)
-            return NULL;
-        cout << "Reading file " << i << "/31" << endl;
-        while (!(this->findPattern(ipFile, FROM)))
+            return i == 1 ? NULL : linkmap;
+        cout << "Reading file " << i << "/" << fileNr << endl;
+        while (!(this->findPattern(ipFile, ENPAGES)))
         {
             // get entry from file
-            cur_id = stoi(this->writeToString(ipFile, stopChars));
+            cur_id = stoi(this->writeToString(ipFile, '\"'));
 
             // add entry to map if next id
             if (!first && cur_id != prev_id)
             {
                 pair<int,string> entry(prev_id, catBuffer);
                 linkmap->insert(entry);
-//                cout << prev_id << "[" << catBuffer << "]" << endl;
                 count = 0;
                 catBuffer = "";
             }
-            if (this->findPattern(ipFile, TO) == -1)
+            if (this->findPattern(ipFile, ENPAGES) == -1)
                 LoggingUtil::warning("Linkmap file ended unexpectedly", logfile);
             if (count)
-                catBuffer += "," + this->writeToString(ipFile, stopChars);
+                catBuffer += "," + this->writeToString(ipFile, '\"');
             else
-                catBuffer += this->writeToString(ipFile, stopChars);
+                catBuffer += this->writeToString(ipFile, '\"');
             prev_id = cur_id;
             count++;
             first = false;

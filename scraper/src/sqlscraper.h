@@ -5,13 +5,12 @@
 #include <vector>
 #include <unordered_set>
 #include "util/parsingutil.h"
-
+#include "xmlscraper.h"
 class SQLScraper
 {
     const char* logfile;
     ParsingUtil parser;
     void writeLinkmap(std::vector<std::vector<int>>* linkmap, const char* path);
-    void writeBotSet(std::unordered_set<size_t>* botset, const char* path);
 public:
     SQLScraper(const char *logfile);
     SQLScraper(const char *ownLogfile, const char* parserLogfile);
@@ -24,10 +23,6 @@ public:
     int sqlToCSV(const char* iPath, const char* oPath);
 
     // parse file with category links to hashmap
-    size_t createLinkmap(const char* fPath);
-
-    // get ids of bot accounts
-    size_t createBotSet(const char* fPath);
+    size_t createLinkmap(language lng);
 };
-
 #endif // SQLSCRAPER_H

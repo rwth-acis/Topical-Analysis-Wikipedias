@@ -6,6 +6,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include "buffer.h"
+#include "loggingutil.h"
 
 class ParsingUtil
 {
@@ -71,6 +72,63 @@ public:
                 return true;
         }
         return false;
+    }
+    static std::string csv2json(const char* path)
+    {
+        FILE* ipFile = LoggingUtil::openFile(path, false);
+        if (!ipFile)
+            return "Invalid file path";
+        std::vector<std::string> attributes;
+        char c;
+        std::string attr = "";
+        // get attributes
+        while ((c = fgetc(ipFile)) != '\n')
+        {
+            if (c == EOF)
+            {
+                LoggingUtil::error("Nice file, jackass!");
+                return "Invalid file";
+            }
+            if (c == ',')
+            {
+                attributes.push_back(attr);
+                attr = "";
+            }
+            else
+                attr += c;
+        }
+        attributes.push_back(attr);
+        attr = "";
+        // write to output file
+        FILE* opFile = LoggingUtil::openFile("output.json", true);
+        fprintf(opFile, "[\n{\"%s\":", attributes[0].c_str());
+        size_t pos = 0;
+        size_t count = 0;
+        bool newLine = true;
+        while ((c = fgetc(ipFile)) != EOF)
+        {
+            if (c == '\n')
+                newLine = true;
+            if (newLine)
+            {
+                if (pos+1 < attributes.size())
+                    LoggingUtil::warning(std::to_string(count) + ": Expected " + std::to_string(attributes.size()) + " columns, got " + std::to_string(pos+1));
+                fprintf(opFile, "},\n{\"%s\":", attributes[0].c_str());
+                pos = 0;
+                count++;
+                newLine = false;
+            }
+            else if (c == ',')
+            {
+                pos++;
+                fprintf(opFile, ",\"%s\":", attributes[pos].c_str());
+            }
+            else
+                fputc(c, opFile);
+        }
+        fputs("}\n]", opFile);
+        fclose(opFile);
+        return "output.json";
     }
 };
 

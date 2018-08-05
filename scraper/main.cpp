@@ -8,13 +8,6 @@
 #define XML_LOGFILE "./xmlLogfile"
 #define SQL_LOGFILE "./sqlLogfile"
 #define PARSING_LOGFILE "./parsingLogfile"
-// sql input files
-#define SQL_CATEGORYLINKS_PATH "../../media/english/rawFiles/enwiki-20180701-categorylinks.sql"
-#define SQL_USERS_PATH "../../media/english/rawFiles/enwiki-latest-user_groups.sql"
-#define SQL_TAXONOMY_PATH "../../media/english/rawFiles/wiki.category.taxonomy.tree.sql"
-// parsed sql files
-#define TXT_CATEGORYLINKS_PATH "../../media/english/categorylinks"
-#define TXT_TAXONOMY_PATH "../../media/english/wiki.category.taxonomy.tree"
 #define TXT_EXT ".txt"
 #define CSV_EXT ".csv"
 // number of attributes
@@ -28,12 +21,13 @@ using namespace std;
  * -1: No valid path given
  */
 static struct option options[] = {
+    {"help", no_argument, NULL, 'h'},
     {"logfile", no_argument, NULL, 'l'},
     {"scrape", no_argument, NULL, 's'},
     {"linkmap", no_argument, NULL, 'i'},
-    {"botset", no_argument, NULL, 'b'},
-    {"history", required_argument, NULL, 'h'},
+    {"history", required_argument, NULL, 'y'},
     {"authors", no_argument, NULL, 'a'},
+    {"csv2json", required_argument, NULL, 'c'},
     {0, 0, 0, 0}
 };
 
@@ -46,10 +40,20 @@ int main(int argc, char* argv[])
     // find out what to do
     char opt;
     string input;
-    while ((opt = getopt_long(argc, argv, "lsibh;a", options, NULL)) != -1)
+    language lng = EN;
+    while ((opt = getopt_long(argc, argv, "lsibhy;ac;", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
+        case 'h':
+            cout << "Hello, I'm your favourite parsing program and can do the following things:\n"
+                    "-l/--logfile changes the path to the logfile. Only works if it is passed as first option.\n"
+                    "-s/--scrape parses the pages.\n"
+                    "-i/--linkmap parses the category links.\n"
+                    "-h/--history parses the history.\n"
+                    "-a/--authors parses the authors"
+                    "-c/--csv2json converts a given csv file to json format\n";
+            break;
         case 'l':
             input = "";
             if (argc < 3)
@@ -70,29 +74,79 @@ int main(int argc, char* argv[])
             break;
         // parse articles
         case 's':
+            input = "";
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
-            scraper->scrapePages();
+            cout << "Please tell me language\n";
+            cin >> input;
+            switch(input[0])
+            {
+                case 'e':
+                    lng = EN;
+                    break;
+                case 'E':
+                    lng = EN;
+                    break;
+                case 'v':
+                    lng = VI;
+                    break;
+                case 'V':
+                    lng = VI;
+                    break;
+            }
+            scraper->scrapePages(lng);
             break;
         case 'i':
+            input = "";
             if (!otherScraper)
                 otherScraper = new SQLScraper(PARSING_LOGFILE, SQL_LOGFILE);
-            otherScraper->createLinkmap(SQL_CATEGORYLINKS_PATH);
+            cout << "Please tell me language\n";
+            cin >> input;
+            switch(input[0])
+            {
+                case 'e':
+                    lng = EN;
+                    break;
+                case 'E':
+                    lng = EN;
+                    break;
+                case 'v':
+                    lng = VI;
+                    break;
+                case 'V':
+                    lng = VI;
+                    break;
+            }
+            otherScraper->createLinkmap(lng);
             break;
-        case 'b':
-            if (!otherScraper)
-                otherScraper = new SQLScraper(PARSING_LOGFILE, SQL_LOGFILE);
-            otherScraper->createBotSet(SQL_USERS_PATH);
-            break;
-        case 'h':
+        case 'y':
         {
             short fileNr = 0;
-            if (!optarg)
+            input = "";
+            cout << "Please tell me language\n";
+            cin >> input;
+            switch(input[0])
             {
-                input = "";
-                cout << "Hello, I am your cool parsing program and enjoy parsing history files!\n"
-                        "However, this is a bit much information to get through all at once, so you'll "
-                        "have to tell me which file I should get to parsing" << endl;
+                case 'e':
+                    lng = EN;
+                    break;
+                case 'E':
+                    lng = EN;
+                    break;
+                case 'v':
+                    lng = VI;
+                    break;
+                case 'V':
+                    lng = VI;
+                    break;
+            }
+            input = "";
+            if (lng == EN)
+            {
+                if (!optarg)
+                    cout << "Hello, I am your cool parsing program and enjoy parsing history files!\n"
+                            "However, this is a bit much information to get through all at once, so you'll "
+                            "have to tell me which file I should get to parsing" << endl;
                 while (!fileNr)
                 {
                     cin >> input;
@@ -103,23 +157,48 @@ int main(int argc, char* argv[])
                                 "I'm sure you just mistyped, try again" << endl;}
                 }
             }
-            else
-            {
-                try {
-                    fileNr = stoi(input);}
-                catch (const invalid_argument) {
-                    cout << "Hm... I seem to be unable to convert your input into a number.\n"
-                            "I'm sure you just mistyped, try again" << endl;}
-            }
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
-            scraper->historyToCSV(fileNr);
+            scraper->historyToCSV(fileNr, lng);
             break;
         }
         case 'a':
+            input = "";
             if (!scraper)
                 scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
-            scraper->getAuthors();
+            cout << "Please tell me language\n";
+            cin >> input;
+            switch(input[0])
+            {
+                case 'e':
+                    lng = EN;
+                    break;
+                case 'E':
+                    lng = EN;
+                    break;
+                case 'v':
+                    lng = VI;
+                    break;
+                case 'V':
+                    lng = VI;
+                    break;
+            }
+            scraper->getAuthors(lng);
+            break;
+        case 'c':
+            if (!optarg)
+                cout << "Hey, what's up with that?! If you want me to convert something, maybe tell me what\n";
+            else
+                ParsingUtil::csv2json(optarg);
+            break;
+        default:
+            cout << "Hello, I'm your favourite parsing program and can do the following things:\n"
+                    "-l/--logfile changes the path to the logfile. Only works if it is passed as first option.\n"
+                    "-s/--scrape parses the pages.\n"
+                    "-i/--linkmap parses the category links.\n"
+                    "-h/--history parses the history.\n"
+                    "-a/--authors parses the authors"
+                    "-c/--csv2json converts a given csv file to json format\n";
             break;
     }
     return 0;

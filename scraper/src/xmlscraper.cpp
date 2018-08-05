@@ -3,19 +3,28 @@
 #include <unordered_map>
 #include <unordered_set>
 
-// path to arangoDB
-#define BASE_PATH "http://localhost:8529//_db/_system/wikipics/"
-// path to files
-#define INDEX_PATH "../../media/english/index-pages.txt"
-#define LINKMAP_PATH "../../media/english/jsonFiles/linkmap"
-#define PAGES_PATH "../../media/english/jsonFiles/pages"
-#define HISTORY_INPUT(x) "../../media/english/compressedFiles/history/enwiki-20180701-pages-meta-history" + to_string(x) + ".xml"
-#define HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
-#define AUTHOR_OUTPUT "../../media/english/csvFiles/authors.csv"
-#define BOTSET "../../media/english/csvFiles/bots.csv"
-// sizes for progress estimation
-#define INDEX_SIZE 502047972
-#define HISTORY_SIZE 76873861874
+// path to files (english)
+#define EN_INDEX_PATH "../../media/english/index-pages.txt"
+#define EN_LINKMAP_PATH "../../media/english/csvFiles/category_links/linkmap"
+#define EN_PAGES_PATH "../../media/english/jsonFiles/pages"
+#define EN_HISTORY_INPUT(x) "../../media/english/compressedFiles/history/enwiki-20180701-pages-meta-history" + to_string(x) + ".xml"
+#define EN_HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
+#define EN_AUTHOR_OUTPUT "../../media/english/csvFiles/authors.csv"
+#define EN_BOTSET "../../media/english/csvFiles/bots.csv"
+// sizes for progress estimation (english)
+#define EN_INDEX_SIZE 502047972
+#define EN_HISTORY_SIZE 76873861874
+// path to files (vietnamese)
+#define VI_INDEX_PATH "../../media/vietnamese/index-pages.txt"
+#define VI_LINKMAP_PATH "../../media/vietnamese/csvFiles/linkmap"
+#define VI_PAGES_PATH "../../media/vietnamese/jsonFiles/pages"
+#define VI_HISTORY_INPUT "../../media/vietnamese/rawFiles/viwiki-20180701-pages-meta-history.xml"
+#define VI_HISTORY_OUTPUT(x) "../../media/vietnamese/csvFiles/history" + to_string(x) + ".csv"
+#define VI_AUTHOR_OUTPUT "../../media/vietnamese/csvFiles/authors.csv"
+#define VI_BOTSET "../../media/vietnamese/csvFiles/bots.csv"
+// sizes for progress estimatinon (vietnamese)
+#define VI_INDEX_SIZE 70675477
+#define VI_HISTORY_SIZE 243255279925
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
@@ -39,7 +48,7 @@
 #define REDIRECT 30334744
 #define DISAMBIGUATION 19204864
 #define WIKIPEDIA_TEMPLATES 44084293 // not considered in current version of DB
-// xml tags
+// tags
 #define PAGE_START "<page>"
 #define PAGE_END "</page>"
 #define TITLE "<title>"
@@ -54,6 +63,8 @@
 #define SHA_TAG "<sha1>"
 #define NAMESPACE "<ns>"
 #define MINOR "<minor />"
+#define EN_CATEGORY_TAG "Category:"
+#define VI_CATEGORY_TAG "Thể loại:"
 
 using namespace std;
 XMLScraper::XMLScraper(const char* logfile)
@@ -80,16 +91,38 @@ XMLScraper::XMLScraper(const char* parserLogging, const char* ownLogging)
     fclose(pFile);
 }
 
-size_t XMLScraper::scrapePages()
+size_t XMLScraper::scrapePages(language lng)
 {
     // get index file
-    FILE* ipFile = LoggingUtil::openFile(INDEX_PATH, false);
+    string path, category_tag, fPath;
+    size_t file_size = 0;
+    switch (lng)
+    {
+        case EN:
+            category_tag = EN_CATEGORY_TAG;
+            path = EN_LINKMAP_PATH;
+            fPath = EN_INDEX_PATH;
+            file_size = EN_INDEX_SIZE;
+            break;
+        case VI:
+            category_tag = VI_CATEGORY_TAG;
+            path = VI_LINKMAP_PATH;
+            fPath = VI_INDEX_PATH;
+            file_size = VI_INDEX_SIZE;
+            break;
+        default:
+            category_tag = EN_CATEGORY_TAG;
+            path = EN_LINKMAP_PATH;
+            fPath = EN_INDEX_PATH;
+            file_size = EN_INDEX_SIZE;
+            break;
+    }
+    FILE* ipFile = LoggingUtil::openFile(fPath, false);
     if (!ipFile)
         return 0;
-
     // load linkmap
-    cout << "Load linkmap from " << LINKMAP_PATH << endl;
-    unordered_map<int,string>* linkmap = parser.parseLinkmap(LINKMAP_PATH);
+    cout << "Load linkmap from " << path << endl;
+    unordered_map<int,string>* linkmap = parser.parseLinkmap(path.c_str());
     if (linkmap == NULL)
     {
         cerr << "Error loading linkmap" << endl;
@@ -98,7 +131,19 @@ size_t XMLScraper::scrapePages()
 
     // create output files
     short fileCount = 1;
-    string fPath = PAGES_PATH + to_string(fileCount) + ".json";
+    switch (lng)
+    {
+        case EN:
+            path = EN_PAGES_PATH;
+            break;
+        case VI:
+            path = VI_PAGES_PATH;
+            break;
+        default:
+            path = EN_PAGES_PATH;
+            break;
+    }
+    fPath = path + to_string(fileCount) + ".json";
     FILE* opFile = LoggingUtil::openFile(fPath, true);
     fputc('[', opFile);
     fclose(opFile);
@@ -111,10 +156,10 @@ size_t XMLScraper::scrapePages()
     while (parser.writeToBuffer(ipFile, &lineBuffer, '\n'))
     {
         // compute progress indicator
-        if (((ftell(ipFile)*10)/INDEX_SIZE) > prog || (INDEX_SIZE - ftell(ipFile) < LARGE_BACKLOG && prog < 10))
+        if (((ftell(ipFile)*10)/file_size) > prog || (file_size - ftell(ipFile) < LARGE_BACKLOG && prog < 10))
         {
             prog++;
-            cout << "Read " << prog*10 << "% of categories\n";
+            cout << "Read " << prog*10 << "% of pages\n";
         }
         // get id
         int id = stoi(parser.writeToString(&lineBuffer, 0, {':'}));
@@ -125,7 +170,7 @@ size_t XMLScraper::scrapePages()
         lineBuffer.flush();
 
         // get namespace
-        short ns = ParsingUtil::reasonableStringCompare(title, "Category:") ? 14 : 0;
+        short ns = ParsingUtil::reasonableStringCompare(title, category_tag) ? 14 : 0;
 
         // get categories
         bool hasCategories = true;
@@ -173,7 +218,7 @@ size_t XMLScraper::scrapePages()
             fputs("\n]\n", opFile);
             fclose(opFile);
             fileCount++;
-            fPath = PAGES_PATH + to_string(fileCount) + ".json";
+            fPath = path + to_string(fileCount) + ".json";
             opFile = LoggingUtil::openFile(fPath, true);
             fputc('[', opFile);
             fclose(opFile);
@@ -221,23 +266,54 @@ bool XMLScraper::isTopical(vector<int>* categories)
     return true;
 }
 
-size_t XMLScraper::historyToCSV(short fileNr)
+size_t XMLScraper::historyToCSV(short fileNr, language lng)
 {
     // get index file
-    string fPath = HISTORY_INPUT(fileNr);
+    string fPath;
+    string pBotset;
+    size_t file_size = 0;
+    short fileCount = 1;
+    switch (lng)
+    {
+        case EN:
+            fPath = EN_HISTORY_INPUT(fileNr);
+            break;
+        case VI:
+            fPath = VI_HISTORY_INPUT;
+            break;
+        default:
+            fPath = EN_HISTORY_INPUT(fileNr);
+            break;
+    }
     FILE* ipFile = LoggingUtil::openFile(fPath, false);
     if (!ipFile)
         return 0;
-
     // create output file
-    fPath = HISTORY_OUTPUT(fileNr);
+    switch (lng)
+    {
+        case EN:
+            fPath = EN_HISTORY_OUTPUT(fileNr);
+            pBotset = EN_BOTSET;
+            file_size = EN_HISTORY_SIZE;
+            break;
+        case VI:
+            fPath = VI_HISTORY_OUTPUT(fileNr+fileCount);
+            pBotset = VI_BOTSET;
+            file_size = VI_HISTORY_SIZE;
+            break;
+        default:
+            fPath = EN_HISTORY_OUTPUT(fileNr);
+            pBotset = EN_BOTSET;
+            file_size = EN_HISTORY_SIZE;
+            break;
+    }
     FILE* opFile = LoggingUtil::openFile(fPath, true);
-    fputs("_key,_to,page_title,_from,user_name,timestamp\n", opFile);
+    fputs("rev_id,_to,page_title,_from,user_name,timestamp\n", opFile);
     fclose(opFile);
 
     // buffer with hashes of revisions + get bots
     unordered_set<string>* revHashes = new unordered_set<string>;
-    unordered_set<string>* botset = parser.parseBotSet(BOTSET);
+    unordered_set<string>* botset = parser.parseBotSet(pBotset.c_str());
 
     // go to beginning of page or next revision
     size_t count = 0, pageId;
@@ -247,7 +323,7 @@ size_t XMLScraper::historyToCSV(short fileNr)
     while ((res = parser.findPattern(ipFile, PAGE_START, REVISION)))
     {
         // compute progress indicator
-        if (((ftell(ipFile)*20)/HISTORY_SIZE) > prog || (HISTORY_SIZE - ftell(ipFile) < ACTUAL_BUFFER_LIMIT && prog < 20))
+        if (((ftell(ipFile)*20)/file_size) > prog || (file_size - ftell(ipFile) < ACTUAL_BUFFER_LIMIT && prog < 20))
         {
             prog++;
             cout << "Read " << prog*5 << "% of revisions\n";
@@ -372,33 +448,103 @@ size_t XMLScraper::historyToCSV(short fileNr)
                 continue;
             // print revision
             revHashes->insert(shaBuffer.print());
-            fPath = HISTORY_OUTPUT(fileNr);
             opFile = fopen(fPath.c_str(), "a");
             fprintf(opFile, "\"%zu\",\"enPages/%zu\",\"%s\",\"enAuthors/%zu\",\"%s\",\"%s\"\n", revisionId, pageId, titleBuffer.raw(), userId, username.raw(), timestampBuffer.raw());
-            fclose(opFile);
             count++;
+            // after 1000000 pages open new file
+            if (count > 1000000)
+            {
+                count = 0;
+                fclose(opFile);
+                fileCount++;
+                switch (lng)
+                {
+                    case EN:
+                        fPath = EN_HISTORY_OUTPUT(fileNr);
+                        break;
+                    case VI:
+                        fPath = VI_HISTORY_OUTPUT(fileNr+fileCount);
+                        break;
+                    default:
+                        fPath = EN_HISTORY_OUTPUT(fileNr);
+                        break;
+                }
+                opFile = LoggingUtil::openFile(fPath, true);
+                fputs("_key,_to,page_title,_from,user_name,timestamp\n", opFile);
+                fclose(opFile);
+            }
+            else
+                fclose(opFile);
         }
     }
-    cout << "Got " << count << " revisions" << endl;
+    cout << "Got " << (fileCount-1)*1000000 + count << " revisions" << endl;
     delete revHashes;
     delete botset;
     return count;
 }
 
-size_t XMLScraper::getAuthors()
+size_t XMLScraper::getAuthors(language lng)
 {
+    string path, fPath;
+    short fileNr = 1;
+    switch (lng)
+    {
+        case EN:
+            path = EN_AUTHOR_OUTPUT;
+            fPath = EN_HISTORY_OUTPUT(fileNr);
+            break;
+        case VI:
+            path = VI_AUTHOR_OUTPUT;
+            fPath = VI_HISTORY_OUTPUT(fileNr);
+            break;
+        default:
+            path = EN_AUTHOR_OUTPUT;
+            fPath = EN_HISTORY_OUTPUT(fileNr);
+            break;
+    }
     size_t count = 0;
-    FILE* opFile = LoggingUtil::openFile(AUTHOR_OUTPUT, true);
+    FILE* opFile = LoggingUtil::openFile(path, true);
     fputs("_key,username\n", opFile);
     fclose(opFile);
-    unordered_map<int,string>* authors = new unordered_map<int, string>();
-    for (short fileNr = 1; fileNr <= 27; fileNr++)
+    FILE* ipFile;
+    while ((ipFile = fopen(fPath.c_str(), "r")))
     {
-        string fPath = HISTORY_OUTPUT(fileNr);
-        FILE* ipFile = LoggingUtil::openFile(fPath, false);
+        fileNr++;
+        fclose(ipFile);
+        switch (lng)
+        {
+            case EN:
+                fPath = EN_HISTORY_OUTPUT(fileNr);
+                break;
+            case VI:
+                fPath = VI_HISTORY_OUTPUT(fileNr);
+                break;
+            default:
+                fPath = EN_HISTORY_OUTPUT(fileNr);
+                break;
+        }
+    }
+    fileNr--;
+    unordered_map<int,string>* authors = new unordered_map<int, string>();
+    for (short i = 1; i <= fileNr; i++)
+    {
+        fPath;
+        switch (lng)
+        {
+            case EN:
+                fPath = EN_HISTORY_OUTPUT(i);
+                break;
+            case VI:
+                fPath = VI_HISTORY_OUTPUT(i);
+                break;
+            default:
+                fPath = EN_HISTORY_OUTPUT(i);
+                break;
+        }
+        ipFile = LoggingUtil::openFile(fPath, false);
         if (!ipFile)
             return 0;
-        cout << "Reading input file " << fileNr << "/27\n";
+        cout << "Reading input file " << i << "/" << fileNr << endl;
         while (parser.findPattern(ipFile, "enAuthors/"))
         {
             int id = stoi(parser.writeToString(ipFile, '\"'));
@@ -410,7 +556,7 @@ size_t XMLScraper::getAuthors()
                 return count;
             }
             string name = parser.writeToString(ipFile, '\"');
-            opFile = fopen(AUTHOR_OUTPUT, "a");
+            opFile = fopen(path.c_str(), "a");
             fprintf(opFile, "\"%d\",\"%s\"\n", id, name.c_str());
             fclose(opFile);
             authors->insert({id,name});
