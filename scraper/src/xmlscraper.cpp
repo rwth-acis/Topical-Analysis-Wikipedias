@@ -38,16 +38,25 @@
 // maximum size allowed for buffers
 #define MAX_BUFFER_SIZE 65536
 #define ACTUAL_BUFFER_LIMIT 1048576
-// "bad category" ids
-#define HIDDEN 15961454
-#define CONTAINER 30176254
-#define TEMPLATE 49310588
-#define MAINTENANCE 738040
-#define TRACKING 7361045
-#define STUB 869270
-#define REDIRECT 30334744
-#define DISAMBIGUATION 19204864
-#define WIKIPEDIA_TEMPLATES 44084293 // not considered in current version of DB
+// "bad category" ids (english)
+#define EN_HIDDEN 15961454
+#define EN_CONTAINER 30176254
+#define EN_TEMPLATE 49310588
+#define EN_MAINTENANCE 738040
+#define EN_TRACKING 7361045
+#define EN_STUB 869270
+#define EN_REDIRECT 30334744
+#define EN_DISAMBIGUATION 19204864
+#define EN_WIKIPEDIA_TEMPLATES 44084293 // not considered in current version of DB
+// "bad category" ids (vietnamese)
+#define VI_HIDDEN 239282
+#define VI_CONTAINER 2417964
+#define VI_TEMPLATE 123748
+#define VI_MAINTENANCE 3116367
+#define VI_TRACKING 3155218
+#define VI_STUB 1439626
+#define VI_REDIRECT 40889
+#define VI_DISAMBIGUATION 2717
 // tags
 #define PAGE_START "<page>"
 #define PAGE_END "</page>"
@@ -187,7 +196,7 @@ size_t XMLScraper::scrapePages(language lng)
         // check for "bad" categories
         if (hasCategories&&ns)
         {
-            if (!this->isTopical(catBuffer))
+            if (!this->isTopical(catBuffer, lng))
             {
                 LoggingUtil::warning("Category " + to_string(id) + " not topical", logfile);
                 delete catBuffer;
@@ -196,7 +205,7 @@ size_t XMLScraper::scrapePages(language lng)
         }
         else if (hasCategories)
         {
-            if (!this->isArticle(catBuffer, linkmap))
+            if (!this->isArticle(catBuffer, linkmap, lng))
             {
                 LoggingUtil::warning("Article " + to_string(id) + " not topical", logfile);
                 delete catBuffer;
@@ -233,12 +242,28 @@ size_t XMLScraper::scrapePages(language lng)
     return 1000000*(fileCount-1)+count;
 }
 
-bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* linkmap)
+bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* linkmap, language lng)
 {
+    int disamb, redir;
+    switch (lng)
+        {
+            case EN:
+                disamb = EN_DISAMBIGUATION;
+                redir = EN_REDIRECT;
+                break;
+            case VI:
+                disamb = VI_DISAMBIGUATION;
+                redir = VI_REDIRECT;
+                break;
+            default:
+                disamb = EN_DISAMBIGUATION;
+                redir = EN_REDIRECT;
+                break;
+        }
     for (int i = 0; i < categories->size(); i++)
     {
         // check for disambiguation/redirect
-        if (categories->at(i) == DISAMBIGUATION || categories->at(i) == REDIRECT)
+        if (categories->at(i) == disamb || categories->at(i) == redir)
             return false;
         // get subcategories
         unordered_map<int,string>::const_iterator subCats = linkmap->find(categories->at(i));
@@ -247,7 +272,7 @@ bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* l
         vector<int>* subCatBuffer = parser.writeCategoryToBuffer(subCats);
         // check for redirect
         for (int j = 0; j < subCatBuffer->size(); j++)
-            if (subCatBuffer->at(j) == REDIRECT)
+            if (subCatBuffer->at(j) == redir)
             {
                 delete subCatBuffer;
                 return false;
@@ -257,12 +282,27 @@ bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* l
     return true;
 }
 
-bool XMLScraper::isTopical(vector<int>* categories)
+bool XMLScraper::isTopical(vector<int>* categories, language lng)
 {
     // check against "bad categories"
-    for (int i = 0; i < categories->size(); i++)
-        if (categories->at(i) == MAINTENANCE || categories->at(i) == TEMPLATE || categories->at(i) == CONTAINER || categories->at(i) == HIDDEN || categories->at(i)  == TRACKING || categories->at(i) == REDIRECT || categories->at(i) == STUB || categories->at(i) == WIKIPEDIA_TEMPLATES)
-            return false;
+    switch (lng)
+        {
+            case EN:
+                for (int i = 0; i < categories->size(); i++)
+                    if (categories->at(i) == EN_MAINTENANCE || categories->at(i) == EN_TEMPLATE || categories->at(i) == EN_CONTAINER || categories->at(i) == EN_HIDDEN || categories->at(i)  == EN_TRACKING || categories->at(i) == EN_REDIRECT || categories->at(i) == EN_STUB || categories->at(i) == EN_WIKIPEDIA_TEMPLATES)
+                        return false;
+                break;
+            case VI:
+                for (int i = 0; i < categories->size(); i++)
+                    if (categories->at(i) == VI_MAINTENANCE || categories->at(i) == VI_TEMPLATE || categories->at(i) == VI_CONTAINER || categories->at(i) == VI_HIDDEN || categories->at(i)  == VI_TRACKING || categories->at(i) == VI_REDIRECT || categories->at(i) == VI_STUB)
+                        return false;
+                break;
+            default:
+                for (int i = 0; i < categories->size(); i++)
+                    if (categories->at(i) == EN_MAINTENANCE || categories->at(i) == EN_TEMPLATE || categories->at(i) == EN_CONTAINER || categories->at(i) == EN_HIDDEN || categories->at(i)  == EN_TRACKING || categories->at(i) == EN_REDIRECT || categories->at(i) == EN_STUB || categories->at(i) == EN_WIKIPEDIA_TEMPLATES)
+                        return false;
+                break;
+        }
     return true;
 }
 
@@ -528,7 +568,6 @@ size_t XMLScraper::getAuthors(language lng)
     unordered_map<int,string>* authors = new unordered_map<int, string>();
     for (short i = 1; i <= fileNr; i++)
     {
-        fPath;
         switch (lng)
         {
             case EN:

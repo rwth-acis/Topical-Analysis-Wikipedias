@@ -38,7 +38,7 @@ public:
 private:
 
     // determine if article/category should be added
-    bool isTopical(std::vector<int>* categories);
-    bool isArticle(std::vector<int>* categories, std::unordered_map<int, std::string>* linkmap);
+    bool isTopical(std::vector<int>* categories, language lng);
+    bool isArticle(std::vector<int>* categories, std::unordered_map<int, std::string>* linkmap, language lng);
 };
 #endif // XMLSCRAPER_H
