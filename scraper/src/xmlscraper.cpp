@@ -10,6 +10,7 @@
 #define EN_HISTORY_INPUT(x) "../../media/english/compressedFiles/history/enwiki-20180701-pages-meta-history" + to_string(x) + ".xml"
 #define EN_HISTORY_OUTPUT(x) "../../media/english/csvFiles/history" + to_string(x) + ".csv"
 #define EN_AUTHOR_OUTPUT "../../media/english/csvFiles/authors.csv"
+#define EN_AUTHORLINK_OUTPUT "../../media/english/csvFiles/authorLinks.csv"
 #define EN_BOTSET "../../media/english/csvFiles/bots.csv"
 // sizes for progress estimation (english)
 #define EN_INDEX_SIZE 502047972
@@ -21,6 +22,7 @@
 #define VI_HISTORY_INPUT "../../media/vietnamese/rawFiles/viwiki-20180701-pages-meta-history.xml"
 #define VI_HISTORY_OUTPUT(x) "../../media/vietnamese/csvFiles/history" + to_string(x) + ".csv"
 #define VI_AUTHOR_OUTPUT "../../media/vietnamese/csvFiles/authors.csv"
+#define VI_AUTHORLINK_OUTPUT "../../media/vietnamese/csvFiles/authorLinks.csv"
 #define VI_BOTSET "../../media/vietnamese/csvFiles/bots.csv"
 // sizes for progress estimatinon (vietnamese)
 #define VI_INDEX_SIZE 70675477
@@ -74,6 +76,9 @@
 #define MINOR "<minor />"
 #define EN_CATEGORY_TAG "Category:"
 #define VI_CATEGORY_TAG "Thể loại:"
+// language codes
+#define LNG_EN "en"
+#define LNG_VI "vi"
 
 using namespace std;
 XMLScraper::XMLScraper(const char* logfile)
@@ -309,20 +314,22 @@ bool XMLScraper::isTopical(vector<int>* categories, language lng)
 size_t XMLScraper::historyToCSV(short fileNr, language lng)
 {
     // get index file
-    string fPath;
-    string pBotset;
+    string fPath, pBotset, lngCode;
     size_t file_size = 0;
     short fileCount = 1;
     switch (lng)
     {
         case EN:
             fPath = EN_HISTORY_INPUT(fileNr);
+            lngCode = LNG_EN;
             break;
         case VI:
             fPath = VI_HISTORY_INPUT;
+            lngCode = LNG_VI;
             break;
         default:
             fPath = EN_HISTORY_INPUT(fileNr);
+            lngCode = LNG_EN;
             break;
     }
     FILE* ipFile = LoggingUtil::openFile(fPath, false);
@@ -489,7 +496,7 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
             // print revision
             revHashes->insert(shaBuffer.print());
             opFile = fopen(fPath.c_str(), "a");
-            fprintf(opFile, "\"%zu\",\"enPages/%zu\",\"%s\",\"enAuthors/%zu\",\"%s\",\"%s\"\n", revisionId, pageId, titleBuffer.raw(), userId, username.raw(), timestampBuffer.raw());
+            fprintf(opFile, "\"%zu\",\"%sPages/%zu\",\"%s\",\"%sAuthors/%zu\",\"%s\",\"%s\"\n", revisionId, lngCode.c_str(), pageId, titleBuffer.raw(), lngCode.c_str(), userId, username.raw(), timestampBuffer.raw());
             count++;
             // after 1000000 pages open new file
             if (count > 1000000)
@@ -584,7 +591,7 @@ size_t XMLScraper::getAuthors(language lng)
         if (!ipFile)
             return 0;
         cout << "Reading input file " << i << "/" << fileNr << endl;
-        while (parser.findPattern(ipFile, "enAuthors/"))
+        while (parser.findPattern(ipFile, "Authors/"))
         {
             int id = stoi(parser.writeToString(ipFile, '\"'));
             if (authors->find(id) != authors->end())
@@ -594,13 +601,168 @@ size_t XMLScraper::getAuthors(language lng)
                 LoggingUtil::warning("File " + fPath + " ended unexpectedly");
                 return count;
             }
+
             string name = parser.writeToString(ipFile, '\"');
-            opFile = fopen(path.c_str(), "a");
-            fprintf(opFile, "\"%d\",\"%s\"\n", id, name.c_str());
-            fclose(opFile);
             authors->insert({id,name});
             count++;
         }
+    }
+    // print map
+    for (auto it = authors->begin(); it != authors->end(); it++)
+    {
+        opFile = fopen(path.c_str(), "a");
+        fprintf(opFile, "\"%d\",\"%s\"\n", it->first, it->second.c_str());
+        fclose(opFile);
+    }
+    return count;
+}
+
+size_t XMLScraper::getAuthors(const char* fPath, const char* path)
+{
+    size_t count = 0;
+    FILE* ipFile;
+    ipFile = LoggingUtil::openFile(fPath, false);
+    if (!ipFile)
+    {
+        cerr << "Could not open file " << fPath << endl;
+        return 0;
+    }
+    cout << "Reading input file " << fPath << endl;
+    FILE* opFile = LoggingUtil::openFile(path, true);
+    if (!opFile)
+    {
+        cerr << "Could not create file " << path << endl;
+        return 0;
+    }
+    fputs("_key,pages\n", opFile);
+    fclose(opFile);
+    unordered_map<size_t,string>* authors = new unordered_map<size_t, string>();
+
+    // get authors and save to map
+    while (parser.findPattern(ipFile, "Test/"))
+    {
+        size_t userId = stoi(parser.writeToString(ipFile, '\"'));
+        if (!parser.findPattern(ipFile, "Pages/"))
+        {
+            LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly");
+            return count;
+        }
+        string pageId = parser.writeToString(ipFile, '\"');
+        auto it = authors->find(userId);
+        if (it == authors->end())
+            authors->insert({userId,pageId});
+        else if (it->second != pageId)
+            it->second += ',' + pageId;
+        count++;
+    }
+    // print map
+    for (auto it = authors->begin(); it != authors->end(); it++)
+    {
+        opFile = fopen(path, "a");
+        fprintf(opFile, "\"%zu\",\"%s\"\n", it->first, it->second.c_str());
+        fclose(opFile);
+    }
+    return count;
+}
+
+size_t XMLScraper::getAuthorLinks(language lng)
+{
+    string path, fPath, lngCode;
+    size_t count = 0;
+    short fileNr = 1;
+    switch (lng)
+    {
+        case EN:
+            path = EN_HISTORY_OUTPUT(fileNr);
+            fPath = EN_AUTHORLINK_OUTPUT;
+            lngCode = LNG_EN;
+            break;
+        case VI:
+            path = VI_HISTORY_OUTPUT(fileNr);
+            fPath = VI_AUTHORLINK_OUTPUT;
+            lngCode = LNG_VI;
+            break;
+        default:
+            fPath = EN_AUTHORLINK_OUTPUT;
+            lngCode = LNG_EN;
+            break;
+    }
+    FILE* opFile = LoggingUtil::openFile(fPath, true);
+    fputs("\"_from\",\"_to\",\"page\"\n", opFile);
+    fclose(opFile);
+    FILE* ipFile;
+    while ((ipFile = fopen(path.c_str(), "r")))
+    {
+        fileNr++;
+        fclose(ipFile);
+        switch (lng)
+        {
+            case EN:
+                path = EN_HISTORY_OUTPUT(fileNr);
+                break;
+            case VI:
+                path = VI_HISTORY_OUTPUT(fileNr);
+                break;
+            default:
+                path = EN_HISTORY_OUTPUT(fileNr);
+                break;
+        }
+    }
+    for (short i = 1; i < fileNr; i++)
+    {
+        switch (lng)
+        {
+            case EN:
+                path = EN_HISTORY_OUTPUT(i);
+                break;
+            case VI:
+                path = VI_HISTORY_OUTPUT(i);
+                break;
+            default:
+                path = EN_HISTORY_OUTPUT(i);
+                break;
+        }
+        ipFile = LoggingUtil::openFile(path, false);
+        cout << "Reading input file " << i << "/" << fileNr-1 << endl;
+        size_t id = 0;
+        unordered_set<size_t> authors;
+        while (parser.findPattern(ipFile, "Pages/"))
+        {
+            size_t newID = stoi(parser.writeToString(ipFile, '\"'));
+            if (id != newID)
+            {
+                if (id)
+                {
+                    for (auto it = authors.begin(); it != authors.end(); it++)
+                        for (auto jt = it; jt != authors.end(); ++jt)
+                        {
+                            if (it == jt)
+                                continue;
+                            opFile = fopen(fPath.c_str(), "a");
+                            fprintf(opFile,"\"%sAuthors/%zu\",\"%sAuthors/%zu\",\"%sPages/%zu\"\n", lngCode.c_str(),*it,lngCode.c_str(),*jt,lngCode.c_str(),id);
+                            fclose(opFile);
+                        }
+                    authors.clear();
+                }
+                id = newID;
+            }
+            if (!parser.findPattern(ipFile, "Authors/"))
+            {
+                cout << "File ended unexpectedly\n";
+                return count;
+            }
+            authors.insert(stoi(parser.writeToString(ipFile, '\"')));
+            count++;
+        }
+        for (auto it = authors.begin(); it != authors.end(); it++)
+            for (auto jt = it; jt != authors.end(); ++jt)
+            {
+                if (it == jt)
+                    continue;
+                opFile = fopen(fPath.c_str(), "a");
+                fprintf(opFile,"\"%sAuthors/%zu\",\"%sAuthors/%zu\",\"%sPages/%zu\"\n", lngCode.c_str(),*it,lngCode.c_str(),*jt,lngCode.c_str(),id);
+                fclose(opFile);
+            }
     }
     return count;
 }

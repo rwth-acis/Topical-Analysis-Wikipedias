@@ -34,6 +34,12 @@ public:
     // creates a CSV file with entries for each author within the history files
     // each author is only added once (identified by contributor ID)
     size_t getAuthors(language lng);
+    // creates a CSV file from the given input file and writes the authors to the
+    // given file
+    size_t getAuthors(const char* ipFile, const char* opFile);
+    // creates two CSV file with entries corresponding to the actor network obtained
+    // from the history files, one with directed, the other with undirected edges
+    size_t getAuthorLinks(language lng);
 
 private:
 

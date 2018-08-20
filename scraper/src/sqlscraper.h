@@ -10,7 +10,7 @@ class SQLScraper
 {
     const char* logfile;
     ParsingUtil parser;
-    void writeLinkmap(std::vector<std::vector<int>>* linkmap, const char* path);
+    void writeLinkmap(std::vector<std::vector<int>>* linkmap, const char* path, language lng);
 public:
     SQLScraper(const char *logfile);
     SQLScraper(const char *ownLogfile, const char* parserLogfile);

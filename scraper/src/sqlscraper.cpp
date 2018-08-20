@@ -15,6 +15,9 @@
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
 #define USERGROUP_SIZE 2027235
+// language codes
+#define LNG_EN "en"
+#define LNG_VI "vi"
 
 using namespace std;
 SQLScraper::SQLScraper(const char* logfile)
@@ -151,7 +154,7 @@ size_t SQLScraper::createLinkmap(language lng)
         {
             LoggingUtil::warning("File " + fPath + " ended unexpectedly at page " + to_string(id_from) + " after reading category " + titleBuffer.print(), logfile);
             cout << "Got " << linkmap->size() << " links" << endl;
-            this->writeLinkmap(linkmap, pLinkmap.c_str());
+            this->writeLinkmap(linkmap, pLinkmap.c_str(), lng);
             delete hashmap;
             size_t count = linkmap->size();
             delete linkmap;
@@ -169,15 +172,29 @@ size_t SQLScraper::createLinkmap(language lng)
         linkmap->push_back({id_from,id_to,ns});
     }
     cout << "Got " << linkmap->size() << " links" << endl;
-    this->writeLinkmap(linkmap, pLinkmap.c_str());
+    this->writeLinkmap(linkmap, pLinkmap.c_str(), lng);
     delete hashmap;
     size_t count = linkmap->size();
     delete linkmap;
     return count;
 }
 
-void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
+void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path, language lng)
 {
+    string lngCode = "";
+    switch (lng)
+    {
+        case EN:
+            lngCode = LNG_EN;
+            break;
+        case VI:
+            lngCode = LNG_VI;
+            break;
+        default:
+            lngCode = LNG_EN;
+            break;
+    }
+
     size_t pageCount = 1;
     size_t count = 0;
     string fPath = path + to_string(pageCount) + ".csv";
@@ -187,7 +204,7 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path)
         LoggingUtil::error("Empty linkmap", logfile);
     for (size_t i = 0; i < linkmap->size(); i++)
     {
-        fprintf(pFile, "\"enPages/%d\",\"enPages/%d\",\"%d\"\n", linkmap->at(i)[0], linkmap->at(i)[1], linkmap->at(i)[2]);
+        fprintf(pFile, "\"%sPages/%d\",\"%sPages/%d\",\"%d\"\n", lngCode.c_str(), linkmap->at(i)[0], lngCode.c_str(), linkmap->at(i)[1], linkmap->at(i)[2]);
         count++;
 
         // after 1million links open new file

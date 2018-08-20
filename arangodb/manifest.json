@@ -1,7 +1,7 @@
 {
     "name": "wikipics",
     "version": "0.0.0",
-    "description": "Service to create article/category network and find shortest paths",
+    "description": "Services to evaluate Wikipedia graphs",
     "engines": {
         "arangodb": "^3.0.0"
     },
@@ -9,8 +9,6 @@
     "license": "My very own private, no one steal please, highly advanced, go write it yourself license",
     "main": "index.js",
     "scripts": {
-        "setup": "scripts/setup.js",
-        "teardown": "scripts/teardown.js"
     },
     "tests": "test/**/*.js"
 }
