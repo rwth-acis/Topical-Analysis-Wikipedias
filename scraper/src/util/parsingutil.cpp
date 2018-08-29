@@ -1,7 +1,7 @@
 #include "parsingutil.h"
 #include <unordered_set>
 // JSON TAGS
-#define ENPAGES "enPages/"
+#define PAGES "Pages/"
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
@@ -663,7 +663,7 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
         if (!ipFile)
             return i == 1 ? NULL : linkmap;
         cout << "Reading file " << i << "/" << fileNr << endl;
-        while (!(this->findPattern(ipFile, ENPAGES)))
+        while (!(this->findPattern(ipFile, PAGES)))
         {
             // get entry from file
             cur_id = stoi(this->writeToString(ipFile, '\"'));
@@ -676,7 +676,7 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
                 count = 0;
                 catBuffer = "";
             }
-            if (this->findPattern(ipFile, ENPAGES) == -1)
+            if (this->findPattern(ipFile, PAGES) == -1)
                 LoggingUtil::warning("Linkmap file ended unexpectedly", logfile);
             if (count)
                 catBuffer += "," + this->writeToString(ipFile, '\"');

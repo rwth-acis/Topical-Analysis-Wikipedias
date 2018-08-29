@@ -22,7 +22,7 @@
 #define VI_HISTORY_INPUT "../../media/vietnamese/rawFiles/viwiki-20180701-pages-meta-history.xml"
 #define VI_HISTORY_OUTPUT(x) "../../media/vietnamese/csvFiles/history" + to_string(x) + ".csv"
 #define VI_AUTHOR_OUTPUT "../../media/vietnamese/csvFiles/authors.csv"
-#define VI_AUTHORLINK_OUTPUT "../../media/vietnamese/csvFiles/authorLinks.csv"
+#define VI_AUTHORLINK_OUTPUT(x) "../../media/vietnamese/csvFiles/authorLinks" + to_string(x) + ".csv"
 #define VI_BOTSET "../../media/vietnamese/csvFiles/bots.csv"
 // sizes for progress estimatinon (vietnamese)
 #define VI_INDEX_SIZE 70675477
@@ -112,12 +112,6 @@ size_t XMLScraper::scrapePages(language lng)
     size_t file_size = 0;
     switch (lng)
     {
-        case EN:
-            category_tag = EN_CATEGORY_TAG;
-            path = EN_LINKMAP_PATH;
-            fPath = EN_INDEX_PATH;
-            file_size = EN_INDEX_SIZE;
-            break;
         case VI:
             category_tag = VI_CATEGORY_TAG;
             path = VI_LINKMAP_PATH;
@@ -147,9 +141,6 @@ size_t XMLScraper::scrapePages(language lng)
     short fileCount = 1;
     switch (lng)
     {
-        case EN:
-            path = EN_PAGES_PATH;
-            break;
         case VI:
             path = VI_PAGES_PATH;
             break;
@@ -176,7 +167,7 @@ size_t XMLScraper::scrapePages(language lng)
             cout << "Read " << prog*10 << "% of pages\n";
         }
         // get id
-        int id = stoi(parser.writeToString(&lineBuffer, 0, {':'}));
+        int id = stol(parser.writeToString(&lineBuffer, 0, {':'}));
 
         // get title
         size_t idx = parser.findPattern(&lineBuffer, ":") + 1;
@@ -252,10 +243,6 @@ bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* l
     int disamb, redir;
     switch (lng)
         {
-            case EN:
-                disamb = EN_DISAMBIGUATION;
-                redir = EN_REDIRECT;
-                break;
             case VI:
                 disamb = VI_DISAMBIGUATION;
                 redir = VI_REDIRECT;
@@ -292,11 +279,6 @@ bool XMLScraper::isTopical(vector<int>* categories, language lng)
     // check against "bad categories"
     switch (lng)
         {
-            case EN:
-                for (int i = 0; i < categories->size(); i++)
-                    if (categories->at(i) == EN_MAINTENANCE || categories->at(i) == EN_TEMPLATE || categories->at(i) == EN_CONTAINER || categories->at(i) == EN_HIDDEN || categories->at(i)  == EN_TRACKING || categories->at(i) == EN_REDIRECT || categories->at(i) == EN_STUB || categories->at(i) == EN_WIKIPEDIA_TEMPLATES)
-                        return false;
-                break;
             case VI:
                 for (int i = 0; i < categories->size(); i++)
                     if (categories->at(i) == VI_MAINTENANCE || categories->at(i) == VI_TEMPLATE || categories->at(i) == VI_CONTAINER || categories->at(i) == VI_HIDDEN || categories->at(i)  == VI_TRACKING || categories->at(i) == VI_REDIRECT || categories->at(i) == VI_STUB)
@@ -314,35 +296,26 @@ bool XMLScraper::isTopical(vector<int>* categories, language lng)
 size_t XMLScraper::historyToCSV(short fileNr, language lng)
 {
     // get index file
-    string fPath, pBotset, lngCode;
+    string path, fPath, pBotset, lngCode;
     size_t file_size = 0;
     short fileCount = 1;
     switch (lng)
     {
-        case EN:
-            fPath = EN_HISTORY_INPUT(fileNr);
-            lngCode = LNG_EN;
-            break;
         case VI:
-            fPath = VI_HISTORY_INPUT;
+            path = VI_HISTORY_INPUT;
             lngCode = LNG_VI;
             break;
         default:
-            fPath = EN_HISTORY_INPUT(fileNr);
+            path = EN_HISTORY_INPUT(fileNr);
             lngCode = LNG_EN;
             break;
     }
-    FILE* ipFile = LoggingUtil::openFile(fPath, false);
+    FILE* ipFile = LoggingUtil::openFile(path, false);
     if (!ipFile)
         return 0;
     // create output file
     switch (lng)
     {
-        case EN:
-            fPath = EN_HISTORY_OUTPUT(fileNr);
-            pBotset = EN_BOTSET;
-            file_size = EN_HISTORY_SIZE;
-            break;
         case VI:
             fPath = VI_HISTORY_OUTPUT(fileNr+fileCount);
             pBotset = VI_BOTSET;
@@ -355,7 +328,7 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
             break;
     }
     FILE* opFile = LoggingUtil::openFile(fPath, true);
-    fputs("rev_id,_to,page_title,_from,user_name,timestamp\n", opFile);
+    fputs("rev_id,_from,page_title,_to,user_name,timestamp\n", opFile);
     fclose(opFile);
 
     // buffer with hashes of revisions + get bots
@@ -367,6 +340,7 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
     short prog = 0, res;
     DynamicBuffer titleBuffer = DynamicBuffer(LARGE_BACKLOG);
     titleBuffer.setMax(MAX_BUFFER_SIZE);
+    cout << "Reading history from file " << path << endl;
     while ((res = parser.findPattern(ipFile, PAGE_START, REVISION)))
     {
         // compute progress indicator
@@ -391,14 +365,14 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
             }
             // check namespace (go to next page if no article)
             parser.findPattern(ipFile, NAMESPACE);
-            if (stoi(parser.writeToString(ipFile, '<')))
+            if (stol(parser.writeToString(ipFile, '<')))
             {
                 parser.findPattern(ipFile, PAGE_END);
                 continue;
             }
             // get pageId
             parser.findPattern(ipFile, ID);
-            pageId = stoi(parser.writeToString(ipFile, '<'));
+            pageId = stol(parser.writeToString(ipFile, '<'));
             continue;
         }
         // got next revision
@@ -406,7 +380,7 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
         {
             // get revision id
             parser.findPattern(ipFile, ID);
-            size_t revisionId = stoi(parser.writeToString(ipFile, '<'));
+            size_t revisionId = stol(parser.writeToString(ipFile, '<'));
             // get timestamp
             parser.findPattern(ipFile, TIMESTAMP);
             DynamicBuffer timestampBuffer = DynamicBuffer(TITLE_LENGTH);
@@ -466,7 +440,7 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
                     if (idState >= id.size())
                         writingId = true;
                 }
-                userId = stoi(idString);
+                userId = stol(idString);
             }
             // userId should not be 0
             if (!userId)
@@ -506,9 +480,6 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
                 fileCount++;
                 switch (lng)
                 {
-                    case EN:
-                        fPath = EN_HISTORY_OUTPUT(fileNr);
-                        break;
                     case VI:
                         fPath = VI_HISTORY_OUTPUT(fileNr+fileCount);
                         break;
@@ -517,7 +488,7 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
                         break;
                 }
                 opFile = LoggingUtil::openFile(fPath, true);
-                fputs("_key,_to,page_title,_from,user_name,timestamp\n", opFile);
+                fputs("rev_id,_from,page_title,_to,user_name,timestamp\n", opFile);
                 fclose(opFile);
             }
             else
@@ -536,10 +507,6 @@ size_t XMLScraper::getAuthors(language lng)
     short fileNr = 1;
     switch (lng)
     {
-        case EN:
-            path = EN_AUTHOR_OUTPUT;
-            fPath = EN_HISTORY_OUTPUT(fileNr);
-            break;
         case VI:
             path = VI_AUTHOR_OUTPUT;
             fPath = VI_HISTORY_OUTPUT(fileNr);
@@ -551,7 +518,7 @@ size_t XMLScraper::getAuthors(language lng)
     }
     size_t count = 0;
     FILE* opFile = LoggingUtil::openFile(path, true);
-    fputs("_key,username\n", opFile);
+    fputs("_key,user_name\n", opFile);
     fclose(opFile);
     FILE* ipFile;
     while ((ipFile = fopen(fPath.c_str(), "r")))
@@ -560,9 +527,6 @@ size_t XMLScraper::getAuthors(language lng)
         fclose(ipFile);
         switch (lng)
         {
-            case EN:
-                fPath = EN_HISTORY_OUTPUT(fileNr);
-                break;
             case VI:
                 fPath = VI_HISTORY_OUTPUT(fileNr);
                 break;
@@ -577,9 +541,6 @@ size_t XMLScraper::getAuthors(language lng)
     {
         switch (lng)
         {
-            case EN:
-                fPath = EN_HISTORY_OUTPUT(i);
-                break;
             case VI:
                 fPath = VI_HISTORY_OUTPUT(i);
                 break;
@@ -593,7 +554,7 @@ size_t XMLScraper::getAuthors(language lng)
         cout << "Reading input file " << i << "/" << fileNr << endl;
         while (parser.findPattern(ipFile, "Authors/"))
         {
-            int id = stoi(parser.writeToString(ipFile, '\"'));
+            int id = stol(parser.writeToString(ipFile, '\"'));
             if (authors->find(id) != authors->end())
                 continue;
             if (!parser.findPattern(ipFile, "\""))
@@ -634,25 +595,39 @@ size_t XMLScraper::getAuthors(const char* fPath, const char* path)
         cerr << "Could not create file " << path << endl;
         return 0;
     }
-    fputs("_key,pages\n", opFile);
+    fputs("_key,user_name\n", opFile);
     fclose(opFile);
-    unordered_map<size_t,string>* authors = new unordered_map<size_t, string>();
+    unordered_map<size_t,string>* authors = new unordered_map<size_t,string>();
 
     // get authors and save to map
-    while (parser.findPattern(ipFile, "Test/"))
+    while (parser.findPattern(ipFile, "Pages/"))
     {
-        size_t userId = stoi(parser.writeToString(ipFile, '\"'));
-        if (!parser.findPattern(ipFile, "Pages/"))
+        string pageId = parser.writeToString(ipFile, '\"');
+        if (!parser.findPattern(ipFile, "Authors/"))
         {
             LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly");
             return count;
         }
-        string pageId = parser.writeToString(ipFile, '\"');
+        size_t userId = stol(parser.writeToString(ipFile, '\"'));
         auto it = authors->find(userId);
         if (it == authors->end())
+            // add author to set
             authors->insert({userId,pageId});
-        else if (it->second != pageId)
-            it->second += ',' + pageId;
+        else
+            // add page to entry
+        {
+            // check if page is already added
+            vector<size_t> pages = ParsingUtil::stringToNumbers(it->second, ',');
+            bool add = true;
+            for (size_t i = 0; i < pages.size(); i++)
+            {
+                if (pages[i] == stol(pageId))
+                    add = false;
+            }
+            if (add)
+                it->second += ',' + pageId;
+        }
+
         count++;
     }
     // print map
@@ -668,28 +643,19 @@ size_t XMLScraper::getAuthors(const char* fPath, const char* path)
 size_t XMLScraper::getAuthorLinks(language lng)
 {
     string path, fPath, lngCode;
-    size_t count = 0;
-    short fileNr = 1;
+    size_t count = 0, lineCount = 0;
+    short fileNr = 1, outputNr = 1;
     switch (lng)
     {
-        case EN:
-            path = EN_HISTORY_OUTPUT(fileNr);
-            fPath = EN_AUTHORLINK_OUTPUT;
-            lngCode = LNG_EN;
-            break;
         case VI:
             path = VI_HISTORY_OUTPUT(fileNr);
-            fPath = VI_AUTHORLINK_OUTPUT;
             lngCode = LNG_VI;
             break;
         default:
-            fPath = EN_AUTHORLINK_OUTPUT;
+            path = EN_HISTORY_OUTPUT(fileNr);
             lngCode = LNG_EN;
             break;
     }
-    FILE* opFile = LoggingUtil::openFile(fPath, true);
-    fputs("\"_from\",\"_to\",\"page\"\n", opFile);
-    fclose(opFile);
     FILE* ipFile;
     while ((ipFile = fopen(path.c_str(), "r")))
     {
@@ -697,9 +663,6 @@ size_t XMLScraper::getAuthorLinks(language lng)
         fclose(ipFile);
         switch (lng)
         {
-            case EN:
-                path = EN_HISTORY_OUTPUT(fileNr);
-                break;
             case VI:
                 path = VI_HISTORY_OUTPUT(fileNr);
                 break;
@@ -708,13 +671,11 @@ size_t XMLScraper::getAuthorLinks(language lng)
                 break;
         }
     }
+    unordered_map<string,string>* authorLinks = new unordered_map<string,string>();
     for (short i = 1; i < fileNr; i++)
     {
         switch (lng)
         {
-            case EN:
-                path = EN_HISTORY_OUTPUT(i);
-                break;
             case VI:
                 path = VI_HISTORY_OUTPUT(i);
                 break;
@@ -728,19 +689,23 @@ size_t XMLScraper::getAuthorLinks(language lng)
         unordered_set<size_t> authors;
         while (parser.findPattern(ipFile, "Pages/"))
         {
-            size_t newID = stoi(parser.writeToString(ipFile, '\"'));
+            size_t newID = stol(parser.writeToString(ipFile, '\"'));
             if (id != newID)
             {
                 if (id)
                 {
                     for (auto it = authors.begin(); it != authors.end(); it++)
-                        for (auto jt = it; jt != authors.end(); ++jt)
+                        for (auto jt = authors.begin(); jt != authors.end(); jt++)
                         {
                             if (it == jt)
                                 continue;
-                            opFile = fopen(fPath.c_str(), "a");
-                            fprintf(opFile,"\"%sAuthors/%zu\",\"%sAuthors/%zu\",\"%sPages/%zu\"\n", lngCode.c_str(),*it,lngCode.c_str(),*jt,lngCode.c_str(),id);
-                            fclose(opFile);
+                            string authorPair = to_string(*it) + ',' + to_string(*jt);
+                            string pageString = lngCode + "Pages/";
+                            auto pointer = authorLinks->find(authorPair);
+                            if (pointer != authorLinks->end())
+                                pointer->second += ',' + pageString + to_string(id);
+                            else
+                                authorLinks->insert({authorPair,pageString + to_string(id)});
                         }
                     authors.clear();
                 }
@@ -751,7 +716,7 @@ size_t XMLScraper::getAuthorLinks(language lng)
                 cout << "File ended unexpectedly\n";
                 return count;
             }
-            authors.insert(stoi(parser.writeToString(ipFile, '\"')));
+            authors.insert(stol(parser.writeToString(ipFile, '\"')));
             count++;
         }
         for (auto it = authors.begin(); it != authors.end(); it++)
@@ -759,10 +724,49 @@ size_t XMLScraper::getAuthorLinks(language lng)
             {
                 if (it == jt)
                     continue;
-                opFile = fopen(fPath.c_str(), "a");
-                fprintf(opFile,"\"%sAuthors/%zu\",\"%sAuthors/%zu\",\"%sPages/%zu\"\n", lngCode.c_str(),*it,lngCode.c_str(),*jt,lngCode.c_str(),id);
-                fclose(opFile);
+                string authorPair = to_string(*it) + ',' + to_string(*jt);
+                string pageString = lngCode + "Pages/";
+                auto pointer = authorLinks->find(authorPair);
+                if (pointer != authorLinks->end())
+                    pointer->second += ',' + pageString + to_string(id);
+                else
+                    authorLinks->insert({authorPair,pageString + to_string(id)});
             }
     }
-    return count;
+    switch (lng)
+    {
+        case VI:
+            fPath = VI_AUTHORLINK_OUTPUT(outputNr);
+            break;
+        default:
+            fPath = EN_AUTHORLINK_OUTPUT;
+            break;
+    }
+    FILE* opFile = LoggingUtil::openFile(fPath, true);
+    fputs("\"_from\",\"_to\",\"pages\"\n", opFile);
+    for (auto it = authorLinks->begin(); it != authorLinks->end(); it++)
+    {
+        vector<size_t> authors = ParsingUtil::stringToNumbers(it->first, ',');
+        fprintf(opFile, "\"%sAuthors/%zu\",\"%sAuthors/%zu\",\"[%s]\"\n",lngCode.c_str(),authors[0],lngCode.c_str(),authors[1],it->second.c_str());
+        lineCount++;
+        if (lineCount >= 1000000)
+        {
+            fclose(opFile);
+            lineCount = 0;
+            count = 0;
+            outputNr++;
+            switch (lng)
+                {
+                case VI:
+                    fPath = VI_AUTHORLINK_OUTPUT(outputNr);
+                    break;
+                default:
+                    fPath = EN_AUTHORLINK_OUTPUT;
+                    break;
+                }
+            opFile = LoggingUtil::openFile(fPath, true);
+            fputs("\"_from\",\"_to\",\"pages\"\n", opFile);
+        }
+    }
+    return 1000000*outputNr+count;
 }

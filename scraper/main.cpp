@@ -26,8 +26,8 @@ static struct option options[] = {
     {"scrape", no_argument, NULL, 's'},
     {"linkmap", no_argument, NULL, 'i'},
     {"history", required_argument, NULL, 'y'},
-    {"actor_network", no_argument, NULL, 'a'},
     {"csv2json", required_argument, NULL, 'c'},
+    {"author_network", no_argument, NULL, 'a'},
     {"authors_history", no_argument, NULL, 'u'},
     {"authors_file", no_argument, NULL, 'f'},
     {0, 0, 0, 0}
@@ -43,17 +43,20 @@ int main(int argc, char* argv[])
     char opt;
     string input;
     language lng = EN;
-    while ((opt = getopt_long(argc, argv, "lsibhy;ac;tuf", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "lsihy;ac;uf", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
         case 'h':
             cout << "Hello, I'm your favourite parsing program and can do the following things:\n"
+                    "-h/--help prints this hopefully helpful message.\n"
                     "-l/--logfile changes the path to the logfile. Only works if it is passed as first option.\n"
                     "-s/--scrape parses the pages.\n"
                     "-i/--linkmap parses the category links.\n"
-                    "-h/--history parses the history.\n"
-                    "-a/--authors parses the authors"
+                    "-y/--history parses the history.\n"
+                    "-a/--author_network parses the links connecting authors by page edits.\n"
+                    "-u/--authors_history parses the authors based on the history files.\n"
+                    "-f/--authors_file parses the authors from a given file.\n"
                     "-c/--csv2json converts a given csv file to json format\n";
             break;
         case 'l':
@@ -237,11 +240,14 @@ int main(int argc, char* argv[])
             break;
         default:
             cout << "Hello, I'm your favourite parsing program and can do the following things:\n"
+                    "-h/--help prints this hopefully helpful message.\n"
                     "-l/--logfile changes the path to the logfile. Only works if it is passed as first option.\n"
                     "-s/--scrape parses the pages.\n"
                     "-i/--linkmap parses the category links.\n"
-                    "-h/--history parses the history.\n"
-                    "-a/--authors parses the authors"
+                    "-y/--history parses the history.\n"
+                    "-a/--author_network parses the links connecting authors by page edits.\n"
+                    "-u/--authors_history parses the authors based on the history files.\n"
+                    "-f/--authors_file parses the authors from a given file.\n"
                     "-c/--csv2json converts a given csv file to json format\n";
             break;
     }

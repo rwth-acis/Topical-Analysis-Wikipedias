@@ -130,6 +130,54 @@ public:
         fclose(opFile);
         return "output.json";
     }
+    // return vector of numbers extracted from given string seperated by given delimiter
+    static std::vector<size_t> stringToNumbers(std::string str, char del)
+    {
+        char c;
+        std::string item;
+        std::vector<std::size_t> res;
+        for (size_t i = 0; i < str.length(); i++)
+        {
+            c = str[i];
+            // add item if c == delimiter char
+            if (c == del)
+            {
+                size_t entry = 0;
+                try{entry = std::stol(item);}
+                catch(const std::invalid_argument){std::cerr << "Invalid entry " << item << std::endl;}
+                res.push_back(entry);
+                item = "";
+                continue;
+            }
+            item += c;
+        }
+        size_t entry = 0;
+        try{entry = std::stol(item);}
+        catch(const std::invalid_argument){std::cerr << "Invalid entry " << item << std::endl;}
+        res.push_back(entry);
+        return res;
+    }
+    // return vector of strings extracted from given string seperated by given delimiter
+    static std::vector<std::string> splitString(std::string str, char del)
+    {
+        char c;
+        std::string item = "";
+        std::vector<std::string> res;
+        for (size_t i = 0; i < str.length(); i++)
+        {
+            c = str[i];
+            // add item if c == delimiter char
+            if (c == del)
+            {
+                res.push_back(item);
+                item = "";
+                continue;
+            }
+            item += c;
+        }
+        res.push_back(item);
+        return res;
+    }
 };
 
 #endif // PARSINGUTIL_H
