@@ -44,7 +44,7 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
         mainCategories.push('viPages/8417');
     }
     const start = time();
-    const commys = db._query("for doc in @@collection return doc",{'@collection':req.pathParams.collection});
+    const commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection});
     var it, result = [];
     while (typeof (it = commys.next()) !== "undefined")
     {
@@ -103,7 +103,7 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
             closestCat = closestCount[closestCat] < closestCount[i] ? i : closestCat;
         collectionName = lng + "Pages";
         const resCat = db._query("for doc in @@collection filter doc._id == @id return doc",{'@collection':collectionName,'id':mainCategories[closestCat]});
-        result.push({"community":it.community,"closest_category":resCat,"average_path_length":pathLengths[closestCat]/pages.length});
+        result.push({"community":it._key,"closest_category":resCat,"average_path_length":pathLengths[closestCat]/pages.length});
     }
     res.send({"result":result,"duration":time()-start});
 })
@@ -150,7 +150,7 @@ router.get('/getPathLengths/:language/:collection/:community', function(req,res)
         for (var x = 0; x < paths.length; x++)
             avgPath += paths[x];
         avgPath /= paths.length;
-        result.push({"community":it.community,"shortest_path":shortestPath,"average_path":avgPath,"duration":time()-start});
+        result.push({"community":it._key,"shortest_path":shortestPath,"average_path":avgPath,"duration":time()-start});
     }
     res.send(result);
 })
@@ -162,7 +162,7 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
         return;
     }
     const start = time();
-    const commys = db._query("for doc in @@collection return doc",{'@collection':req.pathParams.collection});
+    const commys = db._query("for doc in @@collection filter pageCount > 1 return doc",{'@collection':req.pathParams.collection});
     var it, result = [];
     while (typeof (it = commys.next()) !== "undefined")
     {
@@ -216,7 +216,7 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
         for (var x = 0; x < paths.length; x++)
             avgPath += paths[x];
         avgPath /= paths.length;
-        result.push({"community":it.community,"shortest_path":shortestPath,"average_path":avgPath});
+        result.push({"community":it._key,"shortest_path":shortestPath,"average_path":avgPath});
     }
     res.send({"result":result,"duration":time()-start});
 })
@@ -252,7 +252,7 @@ router.get('/getPages/:language/:community', function(req,res) {
                     delete pages_c[j];
                     nullCount++;
                 }
-        result.push({"community":it.community,"size":size,"pages":pages_c,"pageCount":pages_c.length-nullCount});
+        result.push({"_key":it.community,"size":size,"pages":pages_c,"pageCount":pages_c.length-nullCount});
     }
     res.send(result);
 })
@@ -310,6 +310,46 @@ router.get('/getDegree/:collection', function(req,res) {
     }
     res.send({"minDegreeFrom":minDegreeFrom,"minDegreeFrom_v":minDegreeFrom_v,"maxDegreeFrom":maxDegreeFrom,"maxDegreeFrom_v":maxDegreeFrom_v,"avgDegreeFrom":(sumDegreeFrom/edges.count()),
              "minDegreeTo":minDegreeTo,"minDegreeTo_v":minDegreeTo_v,"maxDegreeTo":maxDegreeTo,"maxDegreeTo_v":maxDegreeTo_v,"avgDegreeTo":(sumDegreeTo/edges.count())});
+})
+// returns some statistics regarding the communities in the given collection
+router.get('/getCommunityDetails/:collection', function(req,res) {
+    // get collections
+    if (typeof req.pathParams.collection == "undefined")
+    {
+        res.send("Need to specify name of collection");
+        return;
+    }
+    const commy = db._query("for doc in @@collection return {'community':doc._key,'size':doc.size,'pageCount':doc.pageCount}",{'@collection':req.pathParams.collection});
+    var it, result = {"communities":0,"single_page_community":0,"single_user_community":0,"avg_page_count":0,"avg_size":0,"max_pages_community":{"pageCount":0},"max_size_community":{"size":0},"empty_community":[],"zero_page_community":[]};
+    while (typeof (it = commy.next()) !== "undefined")
+    {
+        result.avg_page_count += it.pageCount;
+        result.avg_size += it.size;
+        result.communities++;
+        // count communities of size 1
+        if (it.pageCount < 2)
+        {
+            if (it.pageCount < 1)
+                result.zero_page_community.push(it);
+            else
+                result.single_page_community++;
+        }
+        if (it.size < 2)
+        {
+            if (it.size < 1)
+                result.empty_community.push(it);
+            else
+                result.single_user_community++;
+        }
+        // check for max communities
+        if (result.max_pages_community.pageCount < it.pageCount)
+            result.max_pages_community = it;
+        if (result.max_size_community.size < it.size)
+            result.max_size_community = it;
+    }
+    result.avg_page_count /= result.communities;
+    result.avg_size /= result.communities;
+    res.send(result);
 })
 // returns minimal, maximal and average community size
 router.get('/getCommunities/:collection/:community', function(req,res) {
