@@ -44,17 +44,21 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
         mainCategories.push('viPages/8417');
     }
     const start = time();
+    // create document in service log collection
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"getMainCategories","language":lng,"collection":req.pathParams.collection},"start":start,"currentCommunity":{},"communitiesPassed":0,"pathQueries":0,"fin":"false"});
     const commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection});
-    var it, result = [];
+    var it, result = [], communityCount = 0, queryCount = 0;
     while (typeof (it = commys.next()) !== "undefined")
     {
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
         // get pages for community
         const pages = it.pages;
 //        var lookUpTable = [];
-        var closestCount = [];
-        var pathLengths = [];
+        var closestCount = [], pathLengths = [];
         closestCount.fill(0,0,mainCategories.length-1);
         pathLengths.fill(0,0,mainCategories.length-1);
+        communityCount++;
         for (var i = 0; i < pages.length; i++)
         {
             var closestCat = -1;
@@ -81,6 +85,7 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
 //                    shortestPath = path;
 //            }
                 var path = db._query("for doc in any shortest_path @pageA to @pageB @@collection return doc", {'pageA': pages[i], 'pageB': mainCategories[j], '@collection':collectionName});
+                queryCount++;
                 if (typeof path !== "undefined" && path._countTotal > 0) // path length 1 means common category
                 {
                     // add path to lookup table
@@ -105,10 +110,11 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
         const resCat = db._query("for doc in @@collection filter doc._id == @id return doc",{'@collection':collectionName,'id':mainCategories[closestCat]});
         result.push({"community":it._key,"closest_category":resCat,"average_path_length":pathLengths[closestCat]/pages.length});
     }
-    res.send({"result":result,"duration":time()-start});
+    const fin = time();
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time} in serviceLogs",{'id':logKey._id,'time':fin});
+    res.send({"result":result,"duration":fin-start});
 })
-
-// returns the average path lengths between pages worked on by the given set of communities
+// returns the average path lengths between pages worked on by the given community
 router.get('/getPathLengths/:language/:collection/:community', function(req,res) {
     // get community
     if (typeof req.pathParams.language == "undefined")
@@ -117,58 +123,13 @@ router.get('/getPathLengths/:language/:collection/:community', function(req,res)
         return;
     }
     const start = time();
-    const commys = db._query("for doc in @@collection filter doc.community == @community return doc",{'@collection':req.pathParams.collection,'community':parseInt(req.pathParams.community)});
-    var it, result = [];
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":req.pathParams.language,"collection":req.pathParams.collection,"community":req.pathParams.community},"start":start,"pathQueries":0,"fin":"false"});
+    const commys = db._query("for doc in @@collection filter doc._key == @community return doc",{'@collection':req.pathParams.collection,'community':req.pathParams.community});
+    var it, result = [], lookUpTable = [], successfulLookups = 0, queryCount = 0;
     while (typeof (it = commys.next()) !== "undefined")
     {
         // get pages for community
         const pages = it.pages;
-        var shortestPath = {"_countTotal":9999}, paths = [];
-        for (var i = 0; i < pages.length-1; i++)
-            for (var j = i+1; j < pages.length; j++)
-            {
-                // get categories
-                var collectionName = req.pathParams.language + "CategoryLinks", catA = [], catB = [];
-                const catsA = db._query("for doc in @@collection filter doc._from == @page return doc",{'@collection':collectionName,'page':pages[i]}).toArray();
-                const catsB = db._query("for doc in @@collection filter doc._from == @page return doc",{'@collection':collectionName,'page':pages[j]}).toArray();
-                // get array with shortest paths
-                for (var m = 0; m < catsA.length; m++)
-                    for (var n = 0; n < catsB.length; n++)
-                    {
-                        var path = db._query("for doc in any shortest_path @catA to @catB @@collection return doc", {'catA': catsA[m]._to, 'catB': catsB[n]._to, '@collection':collectionName});
-                        if (typeof path !== "undefined" && path._countTotal > 0) // path length 1 means common category
-                        {
-                            paths.push(path._countTotal);
-                            // get shortest path
-                            if (shortestPath._countTotal > path._countTotal)
-                                shortestPath = path;
-                        }
-                    }
-            }
-        // get average path length
-        var avgPath = 0;
-        for (var x = 0; x < paths.length; x++)
-            avgPath += paths[x];
-        avgPath /= paths.length;
-        result.push({"community":it._key,"shortest_path":shortestPath,"average_path":avgPath,"duration":time()-start});
-    }
-    res.send(result);
-})
-router.get('/getPathLengths/:language/:collection', function(req,res) {
-    // get community
-    if (typeof req.pathParams.language == "undefined")
-    {
-        res.send("Need to specify language");
-        return;
-    }
-    const start = time();
-    const commys = db._query("for doc in @@collection filter pageCount > 1 return doc",{'@collection':req.pathParams.collection});
-    var it, result = [];
-    while (typeof (it = commys.next()) !== "undefined")
-    {
-        // get pages for community
-        const pages = it.pages;
-        var lookUpTable = [];
         var shortestPath = {"_countTotal":9999}, paths = [];
         for (var i = 0; i < pages.length-1; i++)
             for (var j = i+1; j < pages.length; j++)
@@ -188,18 +149,21 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
                         if (typeof (path = lookUpTable[lookUpKey]) !== "undefined")
                         {
                             paths.push(path._countTotal);
+                            successfulLookups++;
                             if (shortestPath._countTotal > path._countTotal)
                                 shortestPath = path;
-                        }
+                       }
                         // check for reversed path
                         lookUpKey = idB + "," + idA;
                         if (typeof (path = lookUpTable[lookUpKey]) !== "undefined")
                         {
                             paths.push(path._countTotal);
+                            successfulLookups++;
                             if (shortestPath._countTotal > path._countTotal)
                                 shortestPath = path;
                         }
                         var path = db._query("for doc in any shortest_path @catA to @catB @@collection return doc", {'catA': catsA[m]._to, 'catB': catsB[n]._to, '@collection':collectionName});
+                        queryCount++;
                         if (typeof path !== "undefined" && path._countTotal > 0) // path length 1 means common category
                         {
                             // add path to lookup table
@@ -216,9 +180,82 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
         for (var x = 0; x < paths.length; x++)
             avgPath += paths[x];
         avgPath /= paths.length;
+        result.push({"community":it._key,"shortest_path":shortestPath,"average_path":avgPath,"duration":time()-start});
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'qc':queryCount});
+    }
+    const fin = time();
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time} in serviceLogs",{'id':logKey._id,'time':fin});
+    res.send({"result":result,"lookups":successfulLookups});
+})
+// returns the average path lengths between pages worked on by the given set of communities
+router.get('/getPathLengths/:language/:collection', function(req,res) {
+    // get community
+    if (typeof req.pathParams.language == "undefined")
+    {
+        res.send("Need to specify language");
+        return;
+    }
+    const start = time();
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":req.pathParams.language,"collection":req.pathParams.collection},"currentCommunity":{},"start":start,"communitiesPassed":0,"pathQueries":0,"fin":"false"});
+    const commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection});
+    var it, result = [], lookUpTable = [], lookups = 0, communityCount = 0, queryCount = 0;
+    while (typeof (it = commys.next()) !== "undefined")
+    {
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
+        // get pages for community
+        const pages = it.pages;
+        communityCount++;
+        var shortestPath = {"_countTotal":9999}, paths = [];
+        for (var i = 0; i < pages.length-1; i++)
+            for (var j = i+1; j < pages.length; j++)
+            {
+                // get categories
+                var collectionName = req.pathParams.language + "CategoryLinks"
+                // check for shortest path in lookup table
+                const idA = (pages[i]).split('/')[1];
+                const idB = (pages[j]).split('/')[1];
+                var lookUpKey = idA + "," + idB;
+                if (typeof (path = lookUpTable[lookUpKey]) !== "undefined")
+                {
+                    paths.push(path._countTotal);
+                    lookups++;
+                    if (shortestPath._countTotal > path._countTotal)
+                        shortestPath = path;
+                }
+                // check for reversed path
+                lookUpKey = idB + "," + idA;
+                if (typeof (path = lookUpTable[lookUpKey]) !== "undefined")
+                {
+                    paths.push(path._countTotal);
+                    lookups++;
+                    if (shortestPath._countTotal > path._countTotal)
+                        shortestPath = path;
+                }
+                // get path
+                var path = db._query("for doc in any shortest_path @pageA to @pageB @@collection return doc", {'pageA': pages[i], 'pageB': pages[j], '@collection':collectionName});
+                queryCount++;
+                if (typeof path !== "undefined" && path._countTotal > 0) // path length 1 means common category
+                {
+                    // add path to lookup table
+                    lookUpTable[lookUpKey] = path;
+                    paths.push(path._countTotal);
+                    // get shortest path
+                    if (shortestPath._countTotal > path._countTotal)
+                        shortestPath = path;
+                }
+            }
+        // get average path length
+        var avgPath = 0;
+        for (var x = 0; x < paths.length; x++)
+            avgPath += paths[x];
+        avgPath /= paths.length;
         result.push({"community":it._key,"shortest_path":shortestPath,"average_path":avgPath});
     }
-    res.send({"result":result,"duration":time()-start});
+    const fin = time();
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time} in serviceLogs",{'id':logKey._id,'time':fin});
+    res.send({"result":result,"duration":fin-start});
 })
 // returns the pages edited by authors within the communities specified by the given tag
 router.get('/getPages/:language/:community', function(req,res) {
@@ -320,7 +357,7 @@ router.get('/getCommunityDetails/:collection', function(req,res) {
         return;
     }
     const commy = db._query("for doc in @@collection return {'community':doc._key,'size':doc.size,'pageCount':doc.pageCount}",{'@collection':req.pathParams.collection});
-    var it, result = {"communities":0,"single_page_community":0,"single_user_community":0,"avg_page_count":0,"avg_size":0,"max_pages_community":{"pageCount":0},"max_size_community":{"size":0},"empty_community":[],"zero_page_community":[]};
+    var it, result = {"communities":0,"single_page_communities":0,"single_user_communities":0,"avg_page_count":0,"avg_size":0,"max_pages_community":{"pageCount":0},"max_size_community":{"size":0},"empty_community_count":0,"empty_communities":[],"zero_page_community_count":0,"zero_page_communities":[]};
     while (typeof (it = commy.next()) !== "undefined")
     {
         result.avg_page_count += it.pageCount;
@@ -330,16 +367,16 @@ router.get('/getCommunityDetails/:collection', function(req,res) {
         if (it.pageCount < 2)
         {
             if (it.pageCount < 1)
-                result.zero_page_community.push(it);
+                result.zero_page_communities.push(it);
             else
-                result.single_page_community++;
+                result.single_page_communities++;
         }
         if (it.size < 2)
         {
             if (it.size < 1)
-                result.empty_community.push(it);
+                result.empty_communities.push(it);
             else
-                result.single_user_community++;
+                result.single_user_communities++;
         }
         // check for max communities
         if (result.max_pages_community.pageCount < it.pageCount)
@@ -349,6 +386,8 @@ router.get('/getCommunityDetails/:collection', function(req,res) {
     }
     result.avg_page_count /= result.communities;
     result.avg_size /= result.communities;
+    result.empty_community_count = result.empty_communities.length;
+    result.zero_page_community_count = result.zero_page_communities.length;
     res.send(result);
 })
 // returns minimal, maximal and average community size
