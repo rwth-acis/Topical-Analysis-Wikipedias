@@ -17,6 +17,55 @@ router.get('/cancelService/:id', function(req,res) {
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':'canceled'} in serviceLogs", {'id':req.pathParams.id});
     res.send("Canceled service " + req.pathParams.id);
 })
+// returns intra- and inter connectional information regarding the communities within the given set
+router.get('/getCommunityMetrics/:language/:community', function (req,res) {
+    var community, lng;
+    if (typeof (community = req.pathParams.community) === "undefined")
+    {
+        res.send("Specify community")
+        return;
+    }
+    if (typeof (lng = req.pathParams.language) === "undefined")
+    {
+        res.send("Specify language")
+        return;
+    }
+    var timestamp = Date(time()).toString();
+    var status = "running";
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"communityMetrics","language":lng,"community":community},"start":timestamp,"status":status,"edgesVisited":0});
+    const graph = (community[4] == 'H') ? require("@arangodb/general-graph")._graph(lng + "History") : require("@arangodb/general-graph")._graph(lng + "Authors");
+    var collectionName = lng;
+    if (community[4] == 'H')
+        collectionName += "History";
+    else
+        collectionName += "AuthorLinks";
+    const edges = db._query("for doc in @@collection return doc",{'@collection':collectionName});
+    var it, degrees = {}, edgeCount;
+    while (typeof (it = edges.next()) !== "undefined")
+    {
+        // if status == canceled break loop
+        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
+        {
+            status = "canceled";
+            break;
+        }
+        // get authors vertices
+        const fAuth = graph._fromVertex(it._id);
+        const tAuth = graph._toVertex(it._id);
+        // check for communites
+        if (fAuth[community] == tAuth[community])
+            degrees[community]["intern"] = (typeof degrees[community]["intern"] === "undefined") ? 1 : degrees[community]["intern"]+1;
+        else
+            degrees[community]["extern"] = (typeof degrees[community]["extern"] === "undefined") ? 1 : degrees[community]["extern"]+1;
+        edgeCount++;
+    }
+    if (status !== "canceled")
+        status = "done";
+    timestamp = Date(time()).toString();
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'edgesVisited':@edgeCount} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'edgeCount':edgeCount});
+    res.send(degrees);
+})
+
 // returns the average path lengths of pages within communities and the main topic classifications
 router.get('/getMainCategories/:language/:collection', function(req,res) {
     var lng;
@@ -122,9 +171,7 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
     timestamp = Date(fin).toString()
     if (status != "canceled")
         status = "done";
-    else
-        status = "canceled";
-    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':'done','fin':@time,'status':@status} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
     res.send({"result":result,"duration":fin-start});
 })
 // returns the average path lengths between pages worked on by the given community
@@ -212,8 +259,6 @@ router.get('/getPathLengths/:language/:collection/:community', function(req,res)
     timestamp = Date(fin).toString();
     if (status != "canceled")
         status = "done";
-    else
-        status = "canceled";
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
     // store result
     const communityRes = {"type":"pathLengthForCommunity","result":result,"lookups":successfulLookups};
@@ -304,8 +349,6 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
     timestamp = Date(fin).toString();
     if (status != "canceled")
         status = "done";
-    else
-        status = "canceled";
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
     res.send({"result":result,"duration":fin-start});
 })
