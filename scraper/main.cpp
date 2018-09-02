@@ -86,11 +86,11 @@ int main(int argc, char* argv[])
             cin >> input;
             switch(input[0])
             {
-                case 'e':
-                    lng = EN;
+                case 'h':
+                    lng = HE;
                     break;
-                case 'E':
-                    lng = EN;
+                case 'H':
+                    lng = HE;
                     break;
                 case 'v':
                     lng = VI;
@@ -109,11 +109,11 @@ int main(int argc, char* argv[])
             cin >> input;
             switch(input[0])
             {
-                case 'e':
-                    lng = EN;
+                case 'h':
+                    lng = HE;
                     break;
-                case 'E':
-                    lng = EN;
+                case 'H':
+                    lng = HE;
                     break;
                 case 'v':
                     lng = VI;
@@ -132,11 +132,11 @@ int main(int argc, char* argv[])
             cin >> input;
             switch(input[0])
             {
-                case 'e':
-                    lng = EN;
+                case 'h':
+                    lng = HE;
                     break;
-                case 'E':
-                    lng = EN;
+                case 'H':
+                    lng = HE;
                     break;
                 case 'v':
                     lng = VI;
@@ -146,12 +146,14 @@ int main(int argc, char* argv[])
                     break;
             }
             input = "";
-            if (lng == EN)
+            if (lng == HE)
             {
                 if (!optarg)
                     cout << "Hello, I am your cool parsing program and enjoy parsing history files!\n"
                             "However, this is a bit much information to get through all at once, so you'll "
                             "have to tell me which file I should get to parsing" << endl;
+                else
+                   fileNr = stoi(optarg);
                 while (!fileNr)
                 {
                     cin >> input;
@@ -175,11 +177,11 @@ int main(int argc, char* argv[])
             cin >> input;
             switch(input[0])
             {
-                case 'e':
-                    lng = EN;
+                case 'h':
+                    lng = HE;
                     break;
-                case 'E':
-                    lng = EN;
+                case 'H':
+                    lng = HE;
                     break;
                 case 'v':
                     lng = VI;
@@ -204,11 +206,11 @@ int main(int argc, char* argv[])
             cin >> input;
             switch(input[0])
             {
-                case 'e':
-                    lng = EN;
+                case 'h':
+                    lng = HE;
                     break;
-                case 'E':
-                    lng = EN;
+                case 'H':
+                    lng = HE;
                     break;
                 case 'v':
                     lng = VI;

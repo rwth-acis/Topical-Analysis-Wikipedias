@@ -5,19 +5,22 @@
 #define EN_HASHMAP_PATH "../../media/english/index-pages.txt"
 #define EN_LINKMAP_PATH "../../media/english/csvFiles/category_links/linkmap"
 #define EN_CATEGORYLINKS_PATH "../../media/english/rawFiles/enwiki-20180701-categorylinks.sql"
-#define EN_LINKFILE_SIZE 18137842743
 #define VI_HASHMAP_PATH "../../media/vietnamese/index-pages.txt"
 #define VI_LINKMAP_PATH "../../media/vietnamese/csvFiles/linkmap"
 #define VI_CATEGORYLINKS_PATH "../../media/vietnamese/rawFiles/viwiki-20180701-categorylinks.sql"
-#define VI_LINKFILE_SIZE 1037325185
+#define HE_HASHMAP_PATH "../../media/hebrew/index-pages.txt"
+#define HE_LINKMAP_PATH "../../media/hebrew/csvFiles/linkmap"
+#define HE_CATEGORYLINKS_PATH "../../media/hebrew/rawFiles/hewiki-20180801-categorylinks.sql"
 #define EN_CATEGORY_TAG "Category:"
 #define VI_CATEGORY_TAG "Thể loại:"
+#define HE_CATEGORY_TAG "קטגוריה:"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
 #define USERGROUP_SIZE 2027235
 // language codes
 #define LNG_EN "en"
 #define LNG_VI "vi"
+#define LNG_HE "he"
 
 using namespace std;
 SQLScraper::SQLScraper(const char* logfile)
@@ -42,26 +45,22 @@ size_t SQLScraper::createLinkmap(language lng)
 {
     // load hashmap
     string fPath, pHashmap, pLinkmap, category_tag;
-    size_t file_size = 0;
     switch (lng)
     {
-        case EN:
-            category_tag = EN_CATEGORY_TAG;
-            file_size = EN_LINKFILE_SIZE;
-            pHashmap = EN_HASHMAP_PATH;
-            pLinkmap = EN_LINKMAP_PATH;
-            fPath = EN_CATEGORYLINKS_PATH;
+        case HE:
+            category_tag = HE_CATEGORY_TAG;
+            pHashmap = HE_HASHMAP_PATH;
+            pLinkmap = HE_LINKMAP_PATH;
+            fPath = HE_CATEGORYLINKS_PATH;
             break;
         case VI:
             category_tag = VI_CATEGORY_TAG;
-            file_size = VI_LINKFILE_SIZE;
             pHashmap = VI_HASHMAP_PATH;
             pLinkmap = VI_LINKMAP_PATH;
             fPath = VI_CATEGORYLINKS_PATH;
             break;
         default:
             category_tag = EN_CATEGORY_TAG;
-            file_size = EN_LINKFILE_SIZE;
             pHashmap = EN_HASHMAP_PATH;
             pLinkmap = EN_LINKMAP_PATH;
             fPath = EN_CATEGORYLINKS_PATH;
@@ -74,7 +73,11 @@ size_t SQLScraper::createLinkmap(language lng)
         return 0;
 
     // try to open file
-    FILE* ipFile = LoggingUtil::openFile(fPath, false);
+    // get file size
+    FILE* ipFile = fopen(fPath.c_str(), "a");
+    size_t file_size = ftell(ipFile);
+    fclose(ipFile);
+    ipFile = LoggingUtil::openFile(fPath, false);
     if (!ipFile)
     {
         delete hashmap;
@@ -184,8 +187,8 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path, la
     string lngCode = "";
     switch (lng)
     {
-        case EN:
-            lngCode = LNG_EN;
+        case HE:
+            lngCode = LNG_HE;
             break;
         case VI:
             lngCode = LNG_VI;
