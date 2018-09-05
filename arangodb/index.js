@@ -33,14 +33,14 @@ router.get('/getCommunityMetrics/:language/:community', function (req,res) {
     var timestamp = Date(time()).toString();
     var status = "running";
     const logKey = db._collection("serviceLogs").save({"function":{"type":"communityMetrics","language":lng,"community":community},"start":timestamp,"status":status,"edgesVisited":0});
-    const graph = (community[4] == 'H') ? require("@arangodb/general-graph")._graph(lng + "History") : require("@arangodb/general-graph")._graph(lng + "Authors");
+    const graph = (community[2] == 'H') ? require("@arangodb/general-graph")._graph(lng + "History") : require("@arangodb/general-graph")._graph(lng + "Authors");
     var collectionName = lng;
-    if (community[4] == 'H')
+    if (community[2] == 'H')
         collectionName += "History";
     else
         collectionName += "AuthorLinks";
     const edges = db._query("for doc in @@collection return doc",{'@collection':collectionName});
-    var it, degrees = {}, edgeCount;
+    var it, degrees = {}, edgeCount = 0, internSum = 0, externSum = 0;
     while (typeof (it = edges.next()) !== "undefined")
     {
         // if status == canceled break loop
@@ -51,18 +51,29 @@ router.get('/getCommunityMetrics/:language/:community', function (req,res) {
         }
         // get authors vertices
         const fAuth = graph._fromVertex(it._id);
+        const vertCommy = fAuth[community];
         const tAuth = graph._toVertex(it._id);
+        if (typeof degrees[vertCommy] === "undefined")
+            degrees[vertCommy] = {"intern":0,"extern":0};
         // check for communites
         if (fAuth[community] == tAuth[community])
-            degrees[community]["intern"] = (typeof degrees[community]["intern"] === "undefined") ? 1 : degrees[community]["intern"]+1;
+        {
+            internSum++;
+            degrees[vertCommy]["intern"] = (typeof degrees[vertCommy]["intern"] === "undefined") ? 1 : degrees[vertCommy]["intern"]+1;
+        }
         else
-            degrees[community]["extern"] = (typeof degrees[community]["extern"] === "undefined") ? 1 : degrees[community]["extern"]+1;
+        {
+            externSum++;
+            degrees[vertCommy]["extern"] = (typeof degrees[vertCommy]["extern"] === "undefined") ? 1 : degrees[vertCommy]["extern"]+1;
+        }
         edgeCount++;
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'edgesVisited':@edgeCount} in serviceLogs",{'id':logKey._id,'edgeCount':edgeCount});
     }
     if (status !== "canceled")
         status = "done";
     timestamp = Date(time()).toString();
-    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'edgesVisited':@edgeCount} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'edgeCount':edgeCount});
+    degrees[community] =
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'edgesVisited':@edgeCount,'sums':{'intern':@intern,'extern':@extern}} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'edgeCount':edgeCount,'intern':internSum,'extern':externSum});
     res.send(degrees);
 })
 
