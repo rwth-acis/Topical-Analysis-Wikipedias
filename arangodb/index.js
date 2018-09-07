@@ -17,17 +17,73 @@ router.get('/cancelService/:id', function(req,res) {
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':'canceled'} in serviceLogs", {'id':req.pathParams.id});
     res.send("Canceled service " + req.pathParams.id);
 })
+// returns modularity for the given set of communities
+router.get('/getModularity/:language/:collection', function(req,res){
+    var community, lng;
+    if (typeof (community = req.pathParams.collection) === "undefined")
+    {
+        res.send("Specify community");
+        return;
+    }
+    if (typeof (lng = req.pathParams.language) === "undefined")
+    {
+        res.send("Specify language");
+        return;
+    }
+    if (community[4] !== 'H')
+    {
+        res.send("Sorry. This feature is unavailable at the moment try again later");
+        return;
+    }
+
+    var timestamp = Date(time()).toString();
+    var status = "running";
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"modularity","language":lng,"community":community},"start":timestamp,"status":status,"communitiesPassed":0});
+    const graph = (community[4] == 'H') ? require("@arangodb/general-graph")._graph(lng + "History") : require("@arangodb/general-graph")._graph(lng + "Authors");
+    var collectionName = lng + "Pages";
+    const commys = db._query("for doc in @@collection collect commy = doc.@commy into pages return {'community':commy,'pages':pages}",{'@collection':collectionName,'commy':community});
+    collectionName = (community[4] == 'H') ? lng + "History" : lng + "AuthorLinks";
+    const m = db._collection(collectionName).count();
+    var it, commyCount = 0, q = 0;
+    while (typeof (it = commys.next()) !== "undefined")
+    {
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'communitiesPassed':@commyCount} in serviceLogs",{'id':logKey._id,'commyCount':commyCount});
+        // if status == canceled break loop
+        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
+        {
+            status = "canceled";
+            break;
+        }
+        it.pages.forEach(function(page) {
+            const neighbors = graph._neighbors(page.doc._id,{direction:"outbound"});
+            for (var i = 0; i < neighbors.length; i++)
+            {
+                const a = (db._query("for doc in @@collection filter doc._from == @page && doc._to == @auth return doc",{'@collection':collectionName,'page':page.doc._id,'auth':neighbors[i]}).toArray().length > 0);
+                q += a - (neighbors.length / (2 * m));
+            }
+        });
+        commyCount++;
+    }
+    if (status !== "canceled")
+        status = "done";
+    timestamp = Date(time()).toString();
+    q /= 2 * m;
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'communitiesPassed':@commyCount,'modularity':@q} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'commyCount':commyCount,'q':q});
+    res.send(q);
+})
+
 // returns intra- and inter connectional information regarding the communities within the given set
 router.get('/getCommunityMetrics/:language/:community', function (req,res) {
     var community, lng;
     if (typeof (community = req.pathParams.community) === "undefined")
     {
-        res.send("Specify community")
+        res.send("Specify community");
         return;
     }
     if (typeof (lng = req.pathParams.language) === "undefined")
     {
-        res.send("Specify language")
+        res.send("Specify language");
         return;
     }
     var timestamp = Date(time()).toString();
@@ -72,7 +128,6 @@ router.get('/getCommunityMetrics/:language/:community', function (req,res) {
     if (status !== "canceled")
         status = "done";
     timestamp = Date(time()).toString();
-    degrees[community] =
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'edgesVisited':@edgeCount,'sums':{'intern':@intern,'extern':@extern}} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'edgeCount':edgeCount,'intern':internSum,'extern':externSum});
     res.send(degrees);
 })
@@ -122,14 +177,14 @@ router.get('/getMainCategories/:language/:collection', function(req,res) {
     var it, result = [], communityCount = 0, queryCount = 0;
     while (typeof (it = commys.next()) !== "undefined")
     {
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
         // if status == canceled break loop
         if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
         {
             status = "canceled";
             break;
         }
-        // update log entry
-        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
         // get pages for community
         const pages = it.pages;
         var closestCount = {}, pathLengths = [];
@@ -278,7 +333,7 @@ router.get('/getPathLengths/:language/:collection/:community', function(req,res)
     res.send(communityRes);
 })
 // returns the average path lengths between pages worked on by the given set of communities
-router.get('/getPathLengths/:language/:collection', function(req,res) {
+router.get('/getPathLengthsRandomly/:language/:collection/:amount', function(req,res) {
     // get community
     if (typeof req.pathParams.language == "undefined")
     {
@@ -286,6 +341,105 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
         return;
     }
     const lng = req.pathParams.language;
+    const start = time();
+    const amount = parseInt(req.pathParams.amount);
+    var status = "running";
+    var timestamp = Date(start).toString();
+    var status = "running";
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"currentCommunity":{},"start":timestamp,"communitiesPassed":0,"pathQueries":0,"status":status});
+    const commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection}).toArray();
+    // get 'amount' numbers of random ids
+    var incCommys = [];
+    for (var i = 0; i < amount; i++)
+    {
+        var rnd = parseInt(Math.random()*commys.length);
+        if (typeof commys[rnd] !== "undefined")
+            incCommys.push(rnd);
+        else
+            i--;
+    }
+    var it, result = [], lookUpTable = [], lookups = 0, communityCount = 0, queryCount = 0;
+    for (var i = 0; i < incCommys.length; i++)
+    {
+        const it = commys[incCommys[i]];
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
+        // if status == canceled break loop
+        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
+        {
+            status = "canceled";
+            break;
+        }
+        // get pages for community
+        const pages = it.pages;
+        communityCount++;
+        var shortestPath = {"_countTotal":9999}, paths = [];
+        for (var i = 0; i < pages.length-1; i++)
+            for (var j = i+1; j < pages.length; j++)
+            {
+                // get categories
+                var collectionName = lng + "CategoryLinks"
+                // check for shortest path in lookup table
+                const idA = (pages[i]).split('/')[1];
+                const idB = (pages[j]).split('/')[1];
+                var lookUpKey = idA + "," + idB;
+                if (typeof (path = lookUpTable[lookUpKey]) !== "undefined")
+                {
+                    paths.push(path._countTotal);
+                    lookups++;
+                    if (shortestPath._countTotal > path._countTotal)
+                        shortestPath = path;
+                }
+                // check for reversed path
+                lookUpKey = idB + "," + idA;
+                if (typeof (path = lookUpTable[lookUpKey]) !== "undefined")
+                {
+                    paths.push(path._countTotal);
+                    lookups++;
+                    if (shortestPath._countTotal > path._countTotal)
+                        shortestPath = path;
+                }
+                // get path
+                var path = db._query("for doc in any shortest_path @pageA to @pageB @@collection return doc", {'pageA': pages[i], 'pageB': pages[j], '@collection':collectionName});
+                queryCount++;
+                if (typeof path !== "undefined" && path._countTotal > 0) // path length 1 means common category
+                {
+                    // add path to lookup table
+                    lookUpTable[lookUpKey] = path;
+                    paths.push(path._countTotal);
+                    // get shortest path
+                    if (shortestPath._countTotal > path._countTotal)
+                        shortestPath = path;
+                }
+            }
+        // get average path length
+        var avgPath = 0;
+        for (var x = 0; x < paths.length; x++)
+            avgPath += paths[x];
+        avgPath /= paths.length;
+        // store result
+        const communityRes = {"community":it._id,"shortest_path":shortestPath,"average_path":avgPath};
+        result.push(communityRes);
+        var collectionName = lng + "PathLengths";
+        db._collection(collectionName).save({"type":"pathLengthsShortest","result":communityRes});
+    }
+    const fin = time();
+    timestamp = Date(fin).toString();
+    if (status != "canceled")
+        status = "done";
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
+    res.send({"result":result,"duration":fin-start});
+})
+// returns the average path lengths between pages worked on by the given set of communities
+router.get('/getPathLengthsWithOffset/:language/:collection/:offset', function(req,res) {
+    // get community
+    if (typeof req.pathParams.language == "undefined")
+    {
+        res.send("Need to specify language");
+        return;
+    }
+    const lng = req.pathParams.language;
+    const offset = parseInt(req.pathParams.offset);
     const start = time();
     var status = "running";
     var timestamp = Date(start).toString();
@@ -295,14 +449,20 @@ router.get('/getPathLengths/:language/:collection', function(req,res) {
     var it, result = [], lookUpTable = [], lookups = 0, communityCount = 0, queryCount = 0;
     while (typeof (it = commys.next()) !== "undefined")
     {
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
         // if status == canceled break loop
         if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
         {
             status = "canceled";
             break;
         }
-        // update log entry
-        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
+        // skip to start
+        if (communityCount < offset)
+        {
+            communityCount++;
+            continue;
+        }
         // get pages for community
         const pages = it.pages;
         communityCount++;
