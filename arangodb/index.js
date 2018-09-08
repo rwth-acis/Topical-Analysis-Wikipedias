@@ -30,18 +30,13 @@ router.get('/getModularity/:language/:collection', function(req,res){
         res.send("Specify language");
         return;
     }
-    if (community[4] !== 'H')
-    {
-        res.send("Sorry. This feature is unavailable at the moment try again later");
-        return;
-    }
-
     var timestamp = Date(time()).toString();
     var status = "running";
     const logKey = db._collection("serviceLogs").save({"function":{"type":"modularity","language":lng,"community":community},"start":timestamp,"status":status,"communitiesPassed":0});
     const graph = (community[4] == 'H') ? require("@arangodb/general-graph")._graph(lng + "History") : require("@arangodb/general-graph")._graph(lng + "Authors");
-    var collectionName = lng + "Pages";
-    const commys = db._query("for doc in @@collection collect commy = doc.@commy into pages return {'community':commy,'pages':pages}",{'@collection':collectionName,'commy':community});
+    var collectionName = lng
+    collectionName += (community[4] == 'H') ? "Pages" : "Authors";
+    const commys = db._query("for doc in @@collection collect commy = doc.@commy into docs return {'community':commy,'docs':docs}",{'@collection':collectionName,'commy':community});
     collectionName = (community[4] == 'H') ? lng + "History" : lng + "AuthorLinks";
     const m = db._collection(collectionName).count();
     var it, commyCount = 0, q = 0;
@@ -55,11 +50,11 @@ router.get('/getModularity/:language/:collection', function(req,res){
             status = "canceled";
             break;
         }
-        it.pages.forEach(function(page) {
-            const neighbors = graph._neighbors(page.doc._id,{direction:"outbound"});
+        it.docs.forEach(function(doc) {
+            const neighbors = graph._neighbors(doc.doc._id,{direction:"outbound"});
             for (var i = 0; i < neighbors.length; i++)
             {
-                const a = (db._query("for doc in @@collection filter doc._from == @page && doc._to == @auth return doc",{'@collection':collectionName,'page':page.doc._id,'auth':neighbors[i]}).toArray().length > 0);
+                const a = (db._query("for doc in @@collection filter doc._from == @from && doc._to == @to return doc",{'@collection':collectionName,'from':doc.doc._id,'to':neighbors[i]}).toArray().length > 0);
                 q += a - (neighbors.length / (2 * m));
             }
         });
@@ -72,66 +67,6 @@ router.get('/getModularity/:language/:collection', function(req,res){
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'communitiesPassed':@commyCount,'modularity':@q} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'commyCount':commyCount,'q':q});
     res.send(q);
 })
-
-// returns intra- and inter connectional information regarding the communities within the given set
-router.get('/getCommunityMetrics/:language/:community', function (req,res) {
-    var community, lng;
-    if (typeof (community = req.pathParams.community) === "undefined")
-    {
-        res.send("Specify community");
-        return;
-    }
-    if (typeof (lng = req.pathParams.language) === "undefined")
-    {
-        res.send("Specify language");
-        return;
-    }
-    var timestamp = Date(time()).toString();
-    var status = "running";
-    const logKey = db._collection("serviceLogs").save({"function":{"type":"communityMetrics","language":lng,"community":community},"start":timestamp,"status":status,"edgesVisited":0});
-    const graph = (community[2] == 'H') ? require("@arangodb/general-graph")._graph(lng + "History") : require("@arangodb/general-graph")._graph(lng + "Authors");
-    var collectionName = lng;
-    if (community[2] == 'H')
-        collectionName += "History";
-    else
-        collectionName += "AuthorLinks";
-    const edges = db._query("for doc in @@collection return doc",{'@collection':collectionName});
-    var it, degrees = {}, edgeCount = 0, internSum = 0, externSum = 0;
-    while (typeof (it = edges.next()) !== "undefined")
-    {
-        // if status == canceled break loop
-        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
-        {
-            status = "canceled";
-            break;
-        }
-        // get authors vertices
-        const fAuth = graph._fromVertex(it._id);
-        const vertCommy = fAuth[community];
-        const tAuth = graph._toVertex(it._id);
-        if (typeof degrees[vertCommy] === "undefined")
-            degrees[vertCommy] = {"intern":0,"extern":0};
-        // check for communites
-        if (fAuth[community] == tAuth[community])
-        {
-            internSum++;
-            degrees[vertCommy]["intern"] = (typeof degrees[vertCommy]["intern"] === "undefined") ? 1 : degrees[vertCommy]["intern"]+1;
-        }
-        else
-        {
-            externSum++;
-            degrees[vertCommy]["extern"] = (typeof degrees[vertCommy]["extern"] === "undefined") ? 1 : degrees[vertCommy]["extern"]+1;
-        }
-        edgeCount++;
-        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'edgesVisited':@edgeCount} in serviceLogs",{'id':logKey._id,'edgeCount':edgeCount});
-    }
-    if (status !== "canceled")
-        status = "done";
-    timestamp = Date(time()).toString();
-    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'edgesVisited':@edgeCount,'sums':{'intern':@intern,'extern':@extern}} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'edgeCount':edgeCount,'intern':internSum,'extern':externSum});
-    res.send(degrees);
-})
-
 // returns the average path lengths of pages within communities and the main topic classifications
 router.get('/getMainCategories/:language/:collection', function(req,res) {
     var lng;
