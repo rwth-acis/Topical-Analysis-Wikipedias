@@ -16,170 +16,8 @@ router.get('/cancelService/:id', function(req,res) {
     }
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':'canceled'} in serviceLogs", {'id':req.pathParams.id});
     res.send("Canceled service " + req.pathParams.id);
-})
-// returns modularity for the given set of communities
-router.get('/getModularity/:language/:collection', function(req,res){
-    var community, lng;
-    if (typeof (community = req.pathParams.collection) === "undefined")
-    {
-        res.send("Specify community");
-        return;
-    }
-    if (typeof (lng = req.pathParams.language) === "undefined")
-    {
-        res.send("Specify language");
-        return;
-    }
-    var timestamp = Date(time()).toString();
-    var status = "running";
-    const logKey = db._collection("serviceLogs").save({"function":{"type":"modularity","language":lng,"community":community},"start":timestamp,"status":status,"communitiesPassed":0});
-    var collectionName = lng;
-    collectionName += (community[4] == 'H') ? "Pages" : "Authors";
-    const commys = db._query("for doc in @@collection collect commy = doc.@commy into docs return {'community':commy,'docs':docs}",{'@collection':collectionName,'commy':community});
-    collectionName = (community[4] == 'H') ? lng + "History" : lng + "AuthorLinks";
-    const degree = (community[4] == 'H') ? "historyDegree" : "authorsDegree";
-    const m = db._collection(collectionName).count();
-    var it, commyCount = 0, q = 0;
-    while (typeof (it = commys.next()) !== "undefined")
-    {
-        // update log entry
-        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'communitiesPassed':@commyCount} in serviceLogs",{'id':logKey._id,'commyCount':commyCount});
-        // if status == canceled break loop
-        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
-        {
-            status = "canceled";
-            break;
-        }
-        for (var i = 0; i < it.docs.length; i++)
-        {
-            const A = it.docs[i].doc;
-            for (var j = 0; j < it.docs.length; j++)
-            {
-                if (i == j)
-                    continue;
-                const B = it.docs[j].doc;
-                const a = (db._query("for doc in @@collection filter doc._from == @from && doc._to == @to return doc",{'@collection':collectionName,'from':A._id,'to':B._id}).toArray().length > 0) ? 1 : 0;
-                q += a - (A[degree] * B[degree] / (2 * m));
-            }
-        }
-        commyCount++;
-    }
-    if (status !== "canceled")
-        status = "done";
-    timestamp = Date(time()).toString();
-    q /= 2 * m;
-    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'fin':@time,'status':@status,'communitiesPassed':@commyCount,'modularity':@q} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'commyCount':commyCount,'q':q});
-    res.send(q);
-})
-// returns the average path lengths of pages within communities and the main topic classifications
-router.get('/getMainCategories/:language/:collection', function(req,res) {
-    var lng;
-    if (typeof (lng = req.pathParams.language) == "undefined")
-    {
-        res.send("Need to specify language");
-        return;
-    }
-    var mainCategories = [];
-    if (lng == "vi")
-    {
-        mainCategories.push('viPages/6853');
-        mainCategories.push('viPages/1362');
-        mainCategories.push('viPages/7506');
-        mainCategories.push('viPages/7311058');
-        mainCategories.push('viPages/37648');
-        mainCategories.push('viPages/3080');
-        mainCategories.push('viPages/7508');
-        mainCategories.push('viPages/6515');
-        mainCategories.push('viPages/7433');
-        mainCategories.push('viPages/434002');
-        mainCategories.push('viPages/64793');
-        mainCategories.push('viPages/15516');
-        mainCategories.push('viPages/3208634');
-        mainCategories.push('viPages/6834');
-        mainCategories.push('viPages/1331');
-        mainCategories.push('viPages/4619');
-        mainCategories.push('viPages/6845');
-        mainCategories.push('viPages/24895');
-        mainCategories.push('viPages/4113');
-        mainCategories.push('viPages/6286');
-        mainCategories.push('viPages/72306');
-        mainCategories.push('viPages/34030');
-        mainCategories.push('viPages/7494');
-        mainCategories.push('viPages/8417');
-    }
-    const start = time();
-    var timestamp = Date(start).toString();
-    var status = "running";
-    var collectionName = lng + "CategoryLinks";
-    // create document in service log collection
-    const logKey = db._collection("serviceLogs").save({"function":{"type":"getMainCategories","language":lng,"collection":req.pathParams.collection},"start":timestamp,"currentCommunity":{},"communitiesPassed":0,"pathQueries":0,"status":status});
-    const commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection});
-    var it, result = [], communityCount = 0, queryCount = 0;
-    while (typeof (it = commys.next()) !== "undefined")
-    {
-        // update log entry
-        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':communityCount,'qc':queryCount});
-        // if status == canceled break loop
-        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
-        {
-            status = "canceled";
-            break;
-        }
-        // get pages for community
-        const pages = it.pages;
-        var closestCount = {}, pathLengths = [];
-        communityCount++;
-        for (var i = 0; i < pages.length; i++)
-        {
-            var closestCat = -1;
-            var shortestPath = 9999;
-            for (var j = 0; j < mainCategories.length; j++)
-            {
-                collectionName = lng + "CategoryLinks";
-                // check for shortest path in lookup table
-                var path = db._query("with viPages for doc in any shortest_path @pageA to @pageB @@collection return doc", {'pageA': pages[i], 'pageB': mainCategories[j], '@collection':collectionName});
-                queryCount++;
-                if (typeof path !== "undefined" && path._countTotal > 0) // path length 1 means common category
-                {
-                    // get shortest path
-                    if (shortestPath > path._countTotal)
-                    {
-                        closestCat = j;
-                        shortestPath = path._countTotal;
-                    }
-                    // add path length to array
-                    if (typeof pathLengths[j] == "undefined" || pathLengths[j] == NaN)
-                        pathLengths[j] = 1;
-                    else
-                        pathLengths[j] += path._countTotal;
-                }
-            }
-            // get id of closestCat
-            const closestCatId = mainCategories[closestCat];
-            if (typeof closestCount[closestCatId] == "undefined" || closestCount[closestCatId] == NaN)
-                closestCount[closestCatId] = 1;
-            else
-                closestCount[closestCatId]++;
-        }
-        // get overall closest main category
-        var closestCat = 0;
-        for (var i = 1; i < closestCount.length; i++)
-            closestCat = closestCount[closestCat] < closestCount[i] ? i : closestCat;
-        collectionName = lng + "Pages";
-        const resCat = db._query("for doc in @@collection filter doc._id == @id return doc",{'@collection':collectionName,'id':mainCategories[closestCat]}).next();
-        // store result
-        const communityRes = {"community":it._id,"closest_category":resCat,"path_lengths":pathLengths,"closest_count":closestCount};
-        result.push(communityRes);
-        db._collection("pathLengths").save({"type":"pathLengthsMain","result":communityRes});
-    }
-    const fin = time();
-    timestamp = Date(fin).toString()
-    if (status != "canceled")
-        status = "done";
-    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
-    res.send({"result":result,"duration":fin-start});
-})
 // returns the average path lengths between pages worked on by the given community
+})
 router.get('/getPathLengths/:language/:community', function(req,res) {
     // get community
     var community;
@@ -269,9 +107,19 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
     const categoryTree = require("@arangodb/general-graph")._graph(categoryTreeName);
     const pathCollection = "pathLengths";
     const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"currentCommunity":{},"start":timestamp,"communitiesPassed":0,"pathQueries":0,"status":status});
-    const commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection}).toArray();
+    var commys;
+    if (req.pathParams.collection == "none")
+    {
+        var pagesArr = db._query("for doc in @@collection limit @amount return doc",{'@collection':lng+"Pages",'amount':amount}).toArray();
+        var pagesObj = {'pages':pagesArr};
+        commys.push(pagesObj);
+    }
+    else
+        commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection}).toArray();
     // get 'amount' numbers of random ids
     var incCommys = [];
+    if (req.pathParams.collection == "none")
+        amount = 1;
     for (var i = 0; i < amount; i++)
         incCommys.push(parseInt(Math.random()*commys.length));
     var commyCount = 0, queryCount = 0;
@@ -301,7 +149,8 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
                     continue;
                 queryCount++;
                 shortest = (result.shortestPath < shortest) ? result.shortestPath : shortest;
-                if (result.shortestPath < 9999 && result.avgPath > 0)
+                if (typeof result.shortestPath == "number" && result.shortestPath < 9999 && result.shortestPath !== NaN &&
+                        typeof result.avgPath == "number" && result.avgPath > 0 && result.avgPath !== NaN)
                 {
                     sumShortest += result.shortestPath;
                     sumAvg += result.avgPath;
@@ -311,7 +160,10 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
         // get average path length and store result
         commyCount++;
         const communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
-        db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':req.pathParams.collection,'id':it._id,'result':communityRes});
+        if (req.pathParams.collection == "none")
+            db._query("for doc in serviceLogs filter doc._id == @id update doc with {'shortestPaths':@result} in serviceLogs",{'id':logKey._id,'result':communityRes});
+        else
+            db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':req.pathParams.collection,'id':it._id,'result':communityRes});
     }
     const fin = time();
     timestamp = Date(fin).toString();
@@ -386,6 +238,31 @@ router.get('/getPathLengthsWithOffset/:language/:collection/:offset', function(r
         status = "done";
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status});
     res.send({"result":result,"duration":fin-start});
+})
+// returns article pages
+router.get('/getArticles/:language/:community', function(req,res) {
+    var lng,community;
+    // get author community IDs
+    if (typeof (lng = req.pathParams.language) == "undefined")
+    {
+        res.send("Need to specify language");
+        return
+    }
+    if (typeof (community = req.pathParams.community) == "undefined")
+    {
+        res.send("Need to specify language");
+        return
+    }
+    // get communities
+    var commys = db._query("for doc in @@collection collect commy = doc.@community return commy",{'@collection':lng+'Authors','community':community}).toArray();
+    // get pages
+    var result = [];
+    for (var i = 0; i < commys.length; i++)
+    {
+        var pages = db._query("for doc in @@collection filter doc.@community == @commy return {'id':doc._id,'community':doc.@community}",{'@collection':lng+'Pages','community':community,'commy':commys[i]}).next();
+        result.push(pages);
+    }
+    res.send(result);
 })
 // returns the pages edited by authors within the communities specified by the given tag
 router.get('/getPages/:language/:community', function(req,res) {
@@ -582,9 +459,17 @@ function getCategoryPaths(pageA,pageB,categoryGraph,categoryTree,collectionName,
     {
         for (var j = 0; j < catsB.length; j++)
         {
-            var path = db._query("for doc in @@collection filter doc._from == @a && doc._to == @b return doc.distance",{'@collection':collectionName,'a':catsA[i],'b':catsB[j]}).next();
-            if (typeof path == "undefined")
-                path = db._query("for doc in @@collection filter doc._to == @a && doc._from == @b return doc.distance",{'@collection':collectionName,'a':catsA[i],'b':catsB[j]}).next();
+            var queryRes = db._query("for doc in @@collection filter doc._from == @a && doc._to == @b return doc",{'@collection':collectionName,'a':catsA[i],'b':catsB[j]}).next();
+            if (typeof queryRes == "undefined")
+                queryRes = db._query("for doc in @@collection filter doc._to == @a && doc._from == @b return doc",{'@collection':collectionName,'a':catsA[i],'b':catsB[j]}).next();
+            // update community
+            var path;
+            if (typeof queryRes !== "undefined")
+            {
+                if (queryRes.community !== community)
+                    db._query("for doc in @@collection filter doc._id == @id update doc with {'community':@community} in @@collection",{'@collection':collectionName,'id':queryRes._id,'community':community});
+                path = queryRes.distance;
+            }
             // path doesn't exist in collection => compute and save
             if (typeof path == "undefined")
             {
