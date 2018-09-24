@@ -64,10 +64,10 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
                     break;
                 }
                 // get path
-                const result = getCategoryPaths(pages[i],pages[j],categoryGraph,categoryTreeName,pathCollection,collection);
-                if (typeof result.empty !== "undefined")
+                let result = getCategoryPaths(pages[i],pages[j],categoryGraph,categoryTreeName,pathCollection,collection);
+                if (result.count == 0)
                     continue;
-                queryCount++;
+                queryCount += result.count;
                 shortest = (result.shortestPath < shortest) ? result.shortestPath : shortest;
                 if (result.shortestPath < 9999 && result.avgPath > 0)
                 {
@@ -77,7 +77,7 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
                 }
             }
         // get average path length and store result
-        const communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
+        let communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
         db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':collection,'id':it._id,'result':communityRes});
     }
     const fin = time();
@@ -87,6 +87,7 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'qc':queryCount});
     res.send({"duration":fin-start});
 })
+
 // returns the average path lengths between pages worked on by the given set of communities
 router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,res) {
     // get community
@@ -97,17 +98,15 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
     }
     const lng = req.pathParams.language;
     const start = time();
-    const amount = parseInt(req.pathParams.amount);
+    var amount = parseInt(req.pathParams.amount);
     var timestamp = Date(start).toString();
     var status = "running";
-    var collectionName = lng + "CategoryLinks";
     const categoryGraphName = lng + "Categories";
     const categoryTreeName = lng + "CategoryTree";
     const categoryGraph = require("@arangodb/general-graph")._graph(categoryGraphName);
     const categoryTree = require("@arangodb/general-graph")._graph(categoryTreeName);
     const pathCollection = "pathLengths";
-    const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"currentCommunity":{},"start":timestamp,"communitiesPassed":0,"pathQueries":0,"status":status});
-    var commys;
+    var commys = [];
     if (req.pathParams.collection == "none")
     {
         var pagesArr = db._query("for doc in @@collection limit @amount return doc",{'@collection':lng+"Pages",'amount':amount}).toArray();
@@ -122,17 +121,22 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
         amount = 1;
     for (var i = 0; i < amount; i++)
         incCommys.push(parseInt(Math.random()*commys.length));
-    var commyCount = 0, queryCount = 0;
+    var commyCount = 0, queryCount = 0, numAdded = 0;
+    var logKey;
+    if (req.pathParams.collection == "none")
+        logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"pages":commys[0].pages,"start":timestamp,"communitiesPassed":commyCount,"pathQueries":queryCount,"status":status});
+    else
+        logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"currentCommunity":{},"start":timestamp,"communitiesPassed":commyCount,"pathQueries":queryCount,"status":status});
     for (var k = 0; k < incCommys.length; k++)
     {
-        const it = commys[incCommys[k]];
+        let it = commys[incCommys[k]];
         // update log entry
         db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':commyCount,'qc':queryCount});
         // if status == canceled break loop
         if (status == "canceled")
             break;
         // get pages for community
-        const pages = it.pages;
+        let pages = it.pages;
         var shortest = 9999, sumShortest = 0, sumAvg = 0, count = 0;
         for (var i = 0; i < pages.length-1; i++)
             for (var j = i+1; j < pages.length; j++)
@@ -144,10 +148,11 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
                 }
                 // get path
                 empty = false;
-                const result = getCategoryPaths(pages[i],pages[j],categoryGraph,categoryTreeName,pathCollection,req.pathParams.collection);
-                if (typeof result.empty !== "undefined")
+                let result = getCategoryPaths(pages[i],pages[j],categoryGraph,categoryTreeName,pathCollection,req.pathParams.collection);
+                if (result.count == 0)
                     continue;
-                queryCount++;
+                queryCount += result.count;
+                numAdded += result.added;
                 shortest = (result.shortestPath < shortest) ? result.shortestPath : shortest;
                 if (typeof result.shortestPath == "number" && result.shortestPath < 9999 && result.shortestPath !== NaN &&
                         typeof result.avgPath == "number" && result.avgPath > 0 && result.avgPath !== NaN)
@@ -156,14 +161,19 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
                     sumAvg += result.avgPath;
                     count++;
                 }
+                // add document with current timestamp and number of lookups vs. new path computations
+                db._collection("pathLengthLookups").save({'timestamp':Date(time()).toString(),'queriesTotal':queryCount,'added':numAdded});
             }
         // get average path length and store result
         commyCount++;
-        const communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
-        if (req.pathParams.collection == "none")
-            db._query("for doc in serviceLogs filter doc._id == @id update doc with {'shortestPaths':@result} in serviceLogs",{'id':logKey._id,'result':communityRes});
-        else
-            db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':req.pathParams.collection,'id':it._id,'result':communityRes});
+        if (count > 0)
+        {
+            let communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
+            if (req.pathParams.collection == "none")
+                db._query("for doc in serviceLogs filter doc._id == @id update doc with {'shortestPaths':@result} in serviceLogs",{'id':logKey._id,'result':communityRes});
+            else
+                db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':req.pathParams.collection,'id':it._id,'result':communityRes});
+        }
     }
     const fin = time();
     timestamp = Date(fin).toString();
@@ -452,9 +462,9 @@ router.get('/getCommunities/:collection/:community', function(req,res) {
 })
 function getCategoryPaths(pageA,pageB,categoryGraph,categoryTree,collectionName,community)
 {
-    var catsA = categoryGraph._neighbors(pageA);
-    var catsB = categoryGraph._neighbors(pageB);
-    var shortestPath = 9999, sumPath = 0, count = 0;
+    let catsA = categoryGraph._neighbors(pageA);
+    let catsB = categoryGraph._neighbors(pageB);
+    var shortestPath = 9999, sumPath = 0, count = 0, numAdded = 0;
     for (var i = 0; i < catsA.length; i++)
     {
         for (var j = 0; j < catsB.length; j++)
@@ -463,19 +473,27 @@ function getCategoryPaths(pageA,pageB,categoryGraph,categoryTree,collectionName,
             if (typeof queryRes == "undefined")
                 queryRes = db._query("for doc in @@collection filter doc._to == @a && doc._from == @b return doc",{'@collection':collectionName,'a':catsA[i],'b':catsB[j]}).next();
             // update community
-            var path;
+            var path = 0;
             if (typeof queryRes !== "undefined")
             {
                 if (queryRes.community !== community)
+                {
                     db._query("for doc in @@collection filter doc._id == @id update doc with {'community':@community} in @@collection",{'@collection':collectionName,'id':queryRes._id,'community':community});
+                    numAdded++;
+                }
                 path = queryRes.distance;
             }
             // path doesn't exist in collection => compute and save
-            if (typeof path == "undefined")
+            else
             {
-                path = db._query("for doc in any shortest_path @a to @b graph @graph return doc",{'a':catsA[i],'b':catsB[j],'graph':categoryTree})._countTotal;
+                let queryRes = db._query("for doc in any shortest_path @a to @b graph @graph return doc",{'a':catsA[i],'b':catsB[j],'graph':categoryTree});
+                path = queryRes._countTotal;
                 if (path !== 0)
-                    db._collection(collectionName).save({'_from':catsA[i],'_to':catsB[j],'distance':path,'community':community});
+                {
+                    let entry = {'_from':catsA[i],'_to':catsB[j],'distance':path,'community':community};
+                    db._collection(collectionName).save(entry);
+                    numAdded++;
+                }
             }
             if (path !== 0)
             {
@@ -485,7 +503,5 @@ function getCategoryPaths(pageA,pageB,categoryGraph,categoryTree,collectionName,
             }
         }
     }
-    if (count < 1)
-        return {'empty':true};
-    return {'shortestPath':shortestPath,'avgPath':sumPath/count};
+    return {'shortestPath':shortestPath,'avgPath':sumPath/count,'count':count,'added':numAdded};
 }
