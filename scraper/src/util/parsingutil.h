@@ -23,6 +23,8 @@ public:
     char findPattern(FILE* ipFile, const std::vector<char> stopChars);
     size_t findPattern(DynamicBuffer* buffer, const std::string stopStr);
     size_t findPattern(DynamicBuffer* buffer, size_t offset, const std::string stopStr);
+    // looks for pattern in line
+    int findPatternInLine(FILE* ipFile, const std::string stopStr);
     // augmented function for sql files
     int findSQLPattern(FILE* ipFile, const std::string stopStr);
     // check for pattern in buffer
@@ -68,7 +70,7 @@ public:
                 state++;
             else
                 state = 0;
-            if (state >= two.size())
+            if (state >= two.length())
                 return true;
         }
         return false;

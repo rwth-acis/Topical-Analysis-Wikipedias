@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <iostream>
 #include <vector>
+#include <unordered_set>
+#include <unordered_map>
+#include <vector>
 #include "util/parsingutil.h"
 #include "util/buffer.h"
 typedef enum {
@@ -44,7 +47,8 @@ public:
 private:
 
     // determine if article/category should be added
-    bool isTopical(std::vector<int>* categories, language lng);
-    bool isArticle(std::vector<int>* categories, std::unordered_map<int, std::string>* linkmap, language lng);
+    bool isTopical(std::vector<int>* categories, std::unordered_set<int>* nonTopCats);
+    bool isArticle(std::vector<int>* categories, std::unordered_map<int,std::string>* linkmap, language lng);
+    std::unordered_set<int>* getNonTopicalCategories(std::unordered_map<int, std::string>* linkmap, language lng);
 };
 #endif // XMLSCRAPER_H

@@ -110,6 +110,25 @@ size_t ParsingUtil::findPattern(DynamicBuffer* buffer, size_t offset, const std:
     return 0;
 }
 
+int ParsingUtil::findPatternInLine(FILE *ipFile, const string stopStr)
+{
+    char c;
+    size_t state = 0;
+    while ((c = fgetc(ipFile)) != EOF)
+    {
+        if (c == '\n')
+            return 0;
+        if (c == (char) toupper(stopStr[state]) || c == (char) tolower(stopStr[state]))
+            state++;
+        else
+            state = 0;
+
+        if (state >= stopStr.size())
+            return state;
+    }
+    return -1;
+}
+
 int ParsingUtil::findSQLPattern(FILE *ipFile,  const string stopStr)
 {
     char c, p = '0';

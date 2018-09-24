@@ -2,6 +2,7 @@
 //#include <iostream>
 #include "src/xmlscraper.h"
 #include "src/sqlscraper.h"
+#include "src/graph.h"
 #include <getopt.h>
 
 // default logfile path
@@ -30,6 +31,7 @@ static struct option options[] = {
     {"author_network", no_argument, NULL, 'a'},
     {"authors_history", no_argument, NULL, 'u'},
     {"authors_file", no_argument, NULL, 'f'},
+    {"modularity", no_argument, NULL, 'm'},
     {0, 0, 0, 0}
 };
 
@@ -43,7 +45,7 @@ int main(int argc, char* argv[])
     char opt;
     string input;
     language lng = EN;
-    while ((opt = getopt_long(argc, argv, "lsihy;ac;uf", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "hlsiy;c;aufm", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -169,6 +171,12 @@ int main(int argc, char* argv[])
             scraper->historyToCSV(fileNr, lng);
             break;
         }
+        case 'c':
+            if (!optarg)
+                cout << "Hey, what's up with that?! If you want me to convert something, maybe tell me what\n";
+            else
+                ParsingUtil::csv2json(optarg);
+            break;
         case 'a':
             input = "";
             if (!scraper)
@@ -191,12 +199,6 @@ int main(int argc, char* argv[])
                     break;
             }
             scraper->getAuthorLinks(lng);
-            break;
-        case 'c':
-            if (!optarg)
-                cout << "Hey, what's up with that?! If you want me to convert something, maybe tell me what\n";
-            else
-                ParsingUtil::csv2json(optarg);
             break;
         case 'u':
             input = "";
@@ -238,6 +240,15 @@ int main(int argc, char* argv[])
                 cin >> inputTwo;
             }
             scraper->getAuthors(input.c_str(), inputTwo.c_str());
+        }
+            break;
+        case 'm':
+        {
+            input = "";
+            cout << "Please insert the name of the collection in according to which the graph should be constructed!\n";
+            cin >> input;
+            Graph* graph = new Graph(input);
+            cout << "Modularity: " << graph->getModularity() << endl;
         }
             break;
         default:

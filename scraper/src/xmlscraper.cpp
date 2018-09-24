@@ -1,7 +1,5 @@
 #include "xmlscraper.h"
 #include "util/loggingutil.h"
-#include <unordered_map>
-#include <unordered_set>
 
 // path to files (english)
 #define EN_INDEX_PATH "../../media/english/index-pages.txt"
@@ -153,7 +151,8 @@ size_t XMLScraper::scrapePages(language lng)
         cerr << "Error loading linkmap" << endl;
         return 0;
     }
-
+    // create set of non-topical categories
+    unordered_set<int>* nonTopCats = XMLScraper::getNonTopicalCategories(linkmap,lng);
     // create output files
     short fileCount = 1;
     switch (lng)
@@ -212,7 +211,7 @@ size_t XMLScraper::scrapePages(language lng)
         // check for "bad" categories
         if (hasCategories&&ns)
         {
-            if (!this->isTopical(catBuffer, lng))
+            if (!this->isTopical(catBuffer, nonTopCats))
             {
                 LoggingUtil::warning("Category " + to_string(id) + " not topical", logfile);
                 delete catBuffer;
@@ -298,28 +297,70 @@ bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* l
     return true;
 }
 
-bool XMLScraper::isTopical(vector<int>* categories, language lng)
+bool XMLScraper::isTopical(vector<int>* categories, unordered_set<int>* nonTopCats)
 {
     // check against "bad categories"
-    switch (lng)
-        {
-            case VI:
-                for (int i = 0; i < categories->size(); i++)
-                    if (categories->at(i) == VI_MAINTENANCE || categories->at(i) == VI_TEMPLATE || categories->at(i) == VI_CONTAINER || categories->at(i) == VI_HIDDEN || categories->at(i)  == VI_TRACKING || categories->at(i) == VI_REDIRECT || categories->at(i) == VI_STUB)
-                        return false;
-                break;
-            case HE:
-                for (int i = 0; i < categories->size(); i++)
-                    if (categories->at(i) == HE_MAINTENANCE || categories->at(i) == HE_TEMPLATE || categories->at(i) == HE_HIDDEN || categories->at(i) == HE_STUB)
-                        return false;
-                break;
-            default:
-                for (int i = 0; i < categories->size(); i++)
-                    if (categories->at(i) == EN_MAINTENANCE || categories->at(i) == EN_TEMPLATE || categories->at(i) == EN_CONTAINER || categories->at(i) == EN_HIDDEN || categories->at(i)  == EN_TRACKING || categories->at(i) == EN_REDIRECT || categories->at(i) == EN_STUB || categories->at(i) == EN_WIKIPEDIA_TEMPLATES)
-                        return false;
-                break;
-        }
+    for (size_t i = 0; i < categories->size(); i++)
+        if (nonTopCats->find(categories->at(i)) != nonTopCats->end())
+            return false;
     return true;
+}
+
+std::unordered_set<int>* XMLScraper::getNonTopicalCategories(std::unordered_map<int, std::string>* linkmap, language lng)
+{
+    cout << "Filtering non-topical categories\n";
+    // initialize set with known non-topical categories
+    unordered_set<int>* nonTopCats = new unordered_set<int>();
+    switch (lng)
+    {
+        case VI:
+            nonTopCats->insert(VI_MAINTENANCE);
+            nonTopCats->insert(VI_TEMPLATE);
+            nonTopCats->insert(VI_CONTAINER);
+            nonTopCats->insert(VI_HIDDEN);
+            nonTopCats->insert(VI_TRACKING);
+            nonTopCats->insert(VI_REDIRECT);
+            nonTopCats->insert(VI_STUB);
+            break;
+        case HE:
+            nonTopCats->insert(HE_MAINTENANCE);
+            nonTopCats->insert(HE_TEMPLATE);
+            nonTopCats->insert(HE_HIDDEN);
+            nonTopCats->insert(HE_STUB);
+            break;
+        default:
+            nonTopCats->insert(EN_MAINTENANCE);
+            nonTopCats->insert(EN_TEMPLATE);
+            nonTopCats->insert(EN_CONTAINER);
+            nonTopCats->insert(EN_HIDDEN);
+            nonTopCats->insert(EN_TRACKING);
+            nonTopCats->insert(EN_REDIRECT);
+            nonTopCats->insert(EN_STUB);
+            nonTopCats->insert(EN_WIKIPEDIA_TEMPLATES);
+            break;
+    }
+    // iterate over linkmap until no new category is added
+    size_t count = nonTopCats->size();
+    while (count > 0)
+    {
+        count = 0;
+        for (auto it = linkmap->begin(); it != linkmap->end(); it++)
+        {
+            // check for non-topical categories in subcategories
+            vector<int>* subCatBuffer = parser.writeCategoryToBuffer(it);
+            for (int i = 0; i < subCatBuffer->size(); i++)
+            {
+                int subCatId = subCatBuffer->at(i);
+                if (nonTopCats->find(subCatId) != nonTopCats->end())
+                {
+                    // add non-topical category to set
+                    nonTopCats->insert(subCatId);
+                    count++;
+                }
+            }
+        }
+    }
+    return nonTopCats;
 }
 
 size_t XMLScraper::historyToCSV(short fileNr, language lng)
