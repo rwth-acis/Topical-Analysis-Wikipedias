@@ -16,7 +16,6 @@ router.get('/cancelService/:id', function(req,res) {
     }
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':'canceled'} in serviceLogs", {'id':req.pathParams.id});
     res.send("Canceled service " + req.pathParams.id);
-// returns the average path lengths between pages worked on by the given community
 })
 router.get('/getPathLengths/:language/:community', function(req,res) {
     // get community
@@ -90,15 +89,18 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
 
 // returns the average path lengths between pages worked on by the given set of communities
 router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,res) {
-    // get community
-    if (typeof req.pathParams.language == "undefined")
+    // get language
+    var lng, collection;
+    if (typeof (lng = req.pathParams.language) == "undefined")
     {
         res.send("Need to specify language");
         return;
     }
-    const lng = req.pathParams.language;
+    // get community collection
+    if (typeof (collection = req.pathParams.collection) == "undefined")
+        collection = "none";
     const start = time();
-    var amount = parseInt(req.pathParams.amount);
+    const amount = parseInt(req.pathParams.amount);
     var timestamp = Date(start).toString();
     var status = "running";
     const categoryGraphName = lng + "Categories";
@@ -106,81 +108,81 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
     const categoryGraph = require("@arangodb/general-graph")._graph(categoryGraphName);
     const categoryTree = require("@arangodb/general-graph")._graph(categoryTreeName);
     const pathCollection = "pathLengths";
-    var commys = [];
-    if (req.pathParams.collection == "none")
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":collection,"amount":amount},"start":timestamp,"pairsPassed":0,"status":status});
+    var pages = [], numPages = 0;
+    // arbitrary article pairs include all articles
+    if (collection == "none")
     {
-        var pagesArr = db._query("for doc in @@collection limit @amount return doc",{'@collection':lng+"Pages",'amount':amount}).toArray();
-        var pagesObj = {'pages':pagesArr};
-        commys.push(pagesObj);
+        pages = db._query("for doc in @@pages filter doc.namespace == '0' return doc",{'@pages':lng + "Pages"}).toArray();
+        numPages = pages.length;
     }
     else
-        commys = db._query("for doc in @@collection filter doc.pageCount > 1 return doc",{'@collection':req.pathParams.collection}).toArray();
-    // get 'amount' numbers of random ids
-    var incCommys = [];
-    if (req.pathParams.collection == "none")
-        amount = 1;
-    for (var i = 0; i < amount; i++)
-        incCommys.push(parseInt(Math.random()*commys.length));
-    var commyCount = 0, queryCount = 0, numAdded = 0;
-    var logKey;
-    if (req.pathParams.collection == "none")
-        logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"pages":commys[0].pages,"start":timestamp,"communitiesPassed":commyCount,"pathQueries":queryCount,"status":status});
-    else
-        logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"collection":req.pathParams.collection},"currentCommunity":{},"start":timestamp,"communitiesPassed":commyCount,"pathQueries":queryCount,"status":status});
-    for (var k = 0; k < incCommys.length; k++)
     {
-        let it = commys[incCommys[k]];
+        pages = db._query("for doc in @@collection filter doc.pageCount > 1 return doc.pages",{'@collection':collection}).toArray();
+        pages.forEach(entry => numPages += entry.length);
+    }
+    var shortest = 9999, sumShortest = 0, sumAvg = 0, count = 0;
+    for (let i = 0; i < amount; i++)
+    {
         // update log entry
-        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'currentCommunity':@commy,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'commy':it,'cc':commyCount,'qc':queryCount});
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'pairsPassed':@count} in serviceLogs",{'id':logKey._id,'count':count});
         // if status == canceled break loop
-        if (status == "canceled")
-            break;
-        // get pages for community
-        let pages = it.pages;
-        var shortest = 9999, sumShortest = 0, sumAvg = 0, count = 0;
-        for (var i = 0; i < pages.length-1; i++)
-            for (var j = i+1; j < pages.length; j++)
-            {
-                if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
-                {
-                    status = "canceled";
-                    break;
-                }
-                // get path
-                empty = false;
-                let result = getCategoryPaths(pages[i],pages[j],categoryGraph,categoryTreeName,pathCollection,req.pathParams.collection);
-                if (result.count == 0)
-                    continue;
-                queryCount += result.count;
-                numAdded += result.added;
-                shortest = (result.shortestPath < shortest) ? result.shortestPath : shortest;
-                if (typeof result.shortestPath == "number" && result.shortestPath < 9999 && result.shortestPath !== NaN &&
-                        typeof result.avgPath == "number" && result.avgPath > 0 && result.avgPath !== NaN)
-                {
-                    sumShortest += result.shortestPath;
-                    sumAvg += result.avgPath;
-                    count++;
-                }
-                // add document with current timestamp and number of lookups vs. new path computations
-                db._collection("pathLengthLookups").save({'timestamp':Date(time()).toString(),'queriesTotal':queryCount,'added':numAdded});
-            }
-        // get average path length and store result
-        commyCount++;
-        if (count > 0)
+        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
         {
-            let communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
-            if (req.pathParams.collection == "none")
-                db._query("for doc in serviceLogs filter doc._id == @id update doc with {'shortestPaths':@result} in serviceLogs",{'id':logKey._id,'result':communityRes});
+            status = "canceled";
+            break;
+        }
+        // get random pair of articles
+        let idA = parseInt(Math.random()*numPages);
+        var idB = idA;
+        var pageA, pageB;
+        while (idA == idB)
+        {
+            // get any other article for arbitrary pairs
+            if (collection == "none")
+            {
+                idB = parseInt(Math.random()*pages.length);
+                pageA = pages[idA];
+                pageB = pages[idB];
+            }
             else
-                db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':req.pathParams.collection,'id':it._id,'result':communityRes});
+            {
+                // get community of page
+                var pageCount = 0, community = 0;
+                while (pageCount <= idA)
+                    pageCount += pages[community++].length;
+                // get community size
+                numPages = pages[--community].length
+                idA = numPages + (idA - pageCount);
+                // if community size == 2 => pageB == other article
+                if (numPages == 2)
+                    idB = 1 - idA;
+                else
+                    idB = parseInt(Math.random()*pages[community].length);
+                pageA = pages[community][idA];
+                pageB = pages[community][idB];
+            }
+        }
+        // get path length
+        let result = getCategoryPaths(pageA,pageB,categoryGraph,categoryTreeName,pathCollection,collection);
+        // if a path exists => save
+        if (result.count > 0)
+        {
+            count++;
+            shortest = (shortest < result.shortestPath) ? shortest : result.shortestPath;
+            sumShortest += result.shortestPath;
+            sumAvg += result.avgPath;
+            // add document with current timestamp and number of lookups vs. new path computations
+            db._collection("pathLengthLookups").save({'timestamp':Date(time()).toString(),'queriesTotal':result.count,'added':result.added});
         }
     }
+    if (status !== "canceled");
+        status = "done";
+    let result = {'shortest_path':shortest,'average_shortest_path':sumShortest/count,'avgavg_shortestPath':sumAvg/count};
     const fin = time();
     timestamp = Date(fin).toString();
-    if (status != "canceled")
-        status = "done";
-    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time,'communitiesPassed':@cc,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'cc':commyCount,'qc':queryCount});
-    res.send({"duration":fin-start});
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'shortestPaths':@result,'status':@status,'fin':@fin} in serviceLogs",{'id':logKey._id,'result':result,'status':status,'fin':timestamp});
+    res.send({"result":result,"duration":fin-start});
 })
 // returns the average path lengths between pages worked on by the given set of communities
 router.get('/getPathLengthsWithOffset/:language/:collection/:offset', function(req,res) {
@@ -486,16 +488,26 @@ function getCategoryPaths(pageA,pageB,categoryGraph,categoryTree,collectionName,
             // path doesn't exist in collection => compute and save
             else
             {
-                let queryRes = db._query("for doc in any shortest_path @a to @b graph @graph return doc",{'a':catsA[i],'b':catsB[j],'graph':categoryTree});
-                path = queryRes._countTotal;
-                if (path !== 0)
+                // check for faulty result
+                var queryRes;
+                try { queryRes = db._query("for doc in any shortest_path @a to @b graph @graph return doc",{'a':catsA[i],'b':catsB[j],'graph':categoryTree}); }
+                catch(err) { path = 0; }
+                if (typeof queryRes == "undefined")
+                    continue;
+                var it, countTotal = queryRes._countTotal;
+                while (typeof (it = queryRes.next()) !== "undefined")
+                    if (it == null)
+                        countTotal = 0;
+                path = countTotal;
+                // add to lookup table
+                if (typeof path == "number" && path !== 0)
                 {
                     let entry = {'_from':catsA[i],'_to':catsB[j],'distance':path,'community':community};
                     db._collection(collectionName).save(entry);
                     numAdded++;
                 }
             }
-            if (path !== 0)
+            if (typeof path == "number" && path !== 0)
             {
                 sumPath += path;
                 shortestPath = (shortestPath < path) ? shortestPath : path;
