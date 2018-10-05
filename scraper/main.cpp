@@ -32,6 +32,7 @@ static struct option options[] = {
     {"authors_history", no_argument, NULL, 'u'},
     {"authors_file", no_argument, NULL, 'f'},
     {"modularity", no_argument, NULL, 'm'},
+    {"graph", no_argument, NULL, 'g'},
     {0, 0, 0, 0}
 };
 
@@ -45,7 +46,7 @@ int main(int argc, char* argv[])
     char opt;
     string input;
     language lng = EN;
-    while ((opt = getopt_long(argc, argv, "hlsiy;c;aufm", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "hlsiy;c;aufmg", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -248,9 +249,18 @@ int main(int argc, char* argv[])
             cout << "Please insert the name of the collection in according to which the graph should be constructed!\n";
             cin >> input;
             Graph* graph = new Graph(input);
-            cout << "Modularity: " << graph->getModularity() << endl;
+            graph->getModularity();
         }
             break;
+        case 'g':
+        {
+            input = "";
+            cout << "Good Day! I'm happy to construct your graph, please just provide the base path to the file containing the edge information!\n";
+            cin >> input;
+            Graph* graph = new Graph(input.c_str());
+            delete graph;
+            break;
+        }
         default:
             cout << "Hello, I'm your favourite parsing program and can do the following things:\n"
                     "-h/--help prints this hopefully helpful message.\n"

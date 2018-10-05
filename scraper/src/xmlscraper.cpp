@@ -340,26 +340,26 @@ std::unordered_set<int>* XMLScraper::getNonTopicalCategories(std::unordered_map<
             break;
     }
     // iterate over linkmap until no new category is added
-    size_t count = nonTopCats->size();
-    while (count > 0)
-    {
-        count = 0;
-        for (auto it = linkmap->begin(); it != linkmap->end(); it++)
-        {
-            // check for non-topical categories in subcategories
-            vector<int>* subCatBuffer = parser.writeCategoryToBuffer(it);
-            for (int i = 0; i < subCatBuffer->size(); i++)
-            {
-                int subCatId = subCatBuffer->at(i);
-                if (nonTopCats->find(subCatId) != nonTopCats->end())
-                {
-                    // add non-topical category to set
-                    nonTopCats->insert(subCatId);
-                    count++;
-                }
-            }
-        }
-    }
+//    size_t oldSize = 0;
+//    while (oldSize < nonTopCats->size())
+//    {
+//        oldSize = nonTopCats->size();
+//        for (auto it = linkmap->begin(); it != linkmap->end(); it++)
+//        {
+//            // check for non-topical categories in subcategories
+//            vector<int>* subCatBuffer = parser.writeCategoryToBuffer(it);
+//            for (int i = 0; i < subCatBuffer->size(); i++)
+//            {
+//                int subCatId = subCatBuffer->at(i);
+//                // add non-topical category to set
+//                if (nonTopCats->find(subCatId) != nonTopCats->end())
+//                    nonTopCats->insert(it->first);
+//            }
+//            delete subCatBuffer;
+//        }
+//        cout << "End of linkmap\n";
+//    }
+//    cout << "Got " << nonTopCats->size() << " entries\n";
     return nonTopCats;
 }
 

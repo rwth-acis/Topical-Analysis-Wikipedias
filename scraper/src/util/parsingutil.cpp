@@ -682,11 +682,10 @@ unordered_map<int,string>* ParsingUtil::parseLinkmap(const char* path)
         if (!ipFile)
             return i == 1 ? NULL : linkmap;
         cout << "Reading file " << i << "/" << fileNr << endl;
-        while (!(this->findPattern(ipFile, PAGES)))
+        while (this->findPattern(ipFile, PAGES))
         {
             // get entry from file
             cur_id = stoi(this->writeToString(ipFile, '\"'));
-
             // add entry to map if next id
             if (!first && cur_id != prev_id)
             {
