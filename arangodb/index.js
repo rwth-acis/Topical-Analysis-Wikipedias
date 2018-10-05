@@ -55,6 +55,9 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
         const pages = it.pages;
         var shortest = 9999, sumShortest = 0, sumAvg = 0, count = 0;
         for (var i = 0; i < pages.length-1; i++)
+        {
+            if (status == "canceled")
+                break;
             for (var j = i+1; j < pages.length; j++)
             {
                 if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
@@ -75,6 +78,7 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
                     count++;
                 }
             }
+        }
         // get average path length and store result
         let communityRes = {"shortest_path":shortest,"average_shortest_path":sumShortest/count,"avgavg_shortest_path":sumAvg/count};
         db._query("for doc in @@collection filter doc._id == @id update doc with {'shortestPaths':@result} in @@collection",{'@collection':collection,'id':it._id,'result':communityRes});
@@ -134,6 +138,17 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
         }
         // get random pair of articles
         let idA = parseInt(Math.random()*numPages);
+        var community = 0, commySize = 0;
+        if (collection != "none")
+        {
+            // get community of page
+            var pageCount = 0;
+            while (pageCount <= idA)
+                pageCount += pages[community++].length;
+            // get community size
+            commySize = pages[--community].length;
+            idA = commySize + (idA - pageCount);
+        }
         var idB = idA;
         var pageA, pageB;
         while (idA == idB)
@@ -147,18 +162,11 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
             }
             else
             {
-                // get community of page
-                var pageCount = 0, community = 0;
-                while (pageCount <= idA)
-                    pageCount += pages[community++].length;
-                // get community size
-                numPages = pages[--community].length
-                idA = numPages + (idA - pageCount);
                 // if community size == 2 => pageB == other article
                 if (numPages == 2)
                     idB = 1 - idA;
                 else
-                    idB = parseInt(Math.random()*pages[community].length);
+                    idB = parseInt(Math.random()*commySize);
                 pageA = pages[community][idA];
                 pageB = pages[community][idB];
             }
