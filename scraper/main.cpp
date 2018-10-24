@@ -31,8 +31,10 @@ static struct option options[] = {
     {"author_network", no_argument, NULL, 'a'},
     {"authors_history", no_argument, NULL, 'u'},
     {"authors_file", no_argument, NULL, 'f'},
+    {"pages", no_argument, NULL, 'p'},
     {"modularity", no_argument, NULL, 'm'},
     {"graph", no_argument, NULL, 'g'},
+    {"count", no_argument, NULL, 'n'},
     {0, 0, 0, 0}
 };
 
@@ -46,7 +48,7 @@ int main(int argc, char* argv[])
     char opt;
     string input;
     language lng = EN;
-    while ((opt = getopt_long(argc, argv, "hlsiy;c;aufmg", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "hlsiy;c;aufpmgn", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -101,6 +103,12 @@ int main(int argc, char* argv[])
                 case 'V':
                     lng = VI;
                     break;
+                case 's':
+                    lng = SH;
+                    break;
+                case 'S':
+                    lng = SH;
+                    break;
             }
             scraper->scrapePages(lng);
             break;
@@ -124,6 +132,12 @@ int main(int argc, char* argv[])
                 case 'V':
                     lng = VI;
                     break;
+                case 's':
+                    lng = SH;
+                    break;
+                case 'S':
+                    lng = SH;
+                    break;
             }
             otherScraper->createLinkmap(lng);
             break;
@@ -146,6 +160,12 @@ int main(int argc, char* argv[])
                     break;
                 case 'V':
                     lng = VI;
+                    break;
+                case 's':
+                    lng = SH;
+                    break;
+                case 'S':
+                    lng = SH;
                     break;
             }
             input = "";
@@ -198,6 +218,12 @@ int main(int argc, char* argv[])
                 case 'V':
                     lng = VI;
                     break;
+                case 's':
+                    lng = SH;
+                    break;
+                case 'S':
+                    lng = SH;
+                    break;
             }
             scraper->getAuthorLinks(lng);
             break;
@@ -221,6 +247,12 @@ int main(int argc, char* argv[])
                 case 'V':
                     lng = VI;
                     break;
+                case 's':
+                    lng = SH;
+                    break;
+                case 'S':
+                    lng = SH;
+                    break;
             }
             scraper->getAuthors(lng);
             break;
@@ -243,6 +275,25 @@ int main(int argc, char* argv[])
             scraper->getAuthors(input.c_str(), inputTwo.c_str());
         }
             break;
+        case 'p':
+        {
+            input = "";
+            string inputTwo = "";
+            if (!scraper)
+                scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
+            while (input == "")
+            {
+                cout << "Heyho! Would you kindly tell me the source file path\n";
+                cin >> input;
+            }
+            while (inputTwo == "")
+            {
+                cout << "Yeah, that's what I'm talking about!\nAnd now please tell me the path of the output file\n";
+                cin >> inputTwo;
+            }
+            scraper->getPages(input.c_str(), inputTwo.c_str());
+        }
+            break;
         case 'm':
         {
             input = "";
@@ -259,6 +310,15 @@ int main(int argc, char* argv[])
             cin >> input;
             Graph* graph = new Graph(input.c_str());
             delete graph;
+            break;
+        }
+        case 'n':
+        {
+            input = "";
+            cout << "Good Day! I'm happy to count so tell me a file path, bro!!\n";
+            cin >> input;
+            ParsingUtil* parser = new ParsingUtil();
+            parser->countPages(input.c_str());
             break;
         }
         default:

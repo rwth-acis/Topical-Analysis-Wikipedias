@@ -11,9 +11,13 @@
 #define HE_HASHMAP_PATH "../../media/hebrew/index-pages.txt"
 #define HE_LINKMAP_PATH "../../media/hebrew/csvFiles/linkmap"
 #define HE_CATEGORYLINKS_PATH "../../media/hebrew/rawFiles/hewiki-20180801-categorylinks.sql"
+#define SH_HASHMAP_PATH "../../media/serbo-croat/index-pages.txt"
+#define SH_LINKMAP_PATH "../../media/serbo-croat/csvFiles/linkmap"
+#define SH_CATEGORYLINKS_PATH "../../media/serbo-croat/rawFiles/shwiki-20181001-categorylinks.sql"
 #define EN_CATEGORY_TAG "Category:"
 #define VI_CATEGORY_TAG "Thể loại:"
 #define HE_CATEGORY_TAG "קטגוריה:"
+#define SH_CATEGORY_TAG "Kategorija:"
 #define SQL_TABLE_START "VALUES"
 #define TITLE_LENGTH 256
 #define USERGROUP_SIZE 2027235
@@ -21,6 +25,7 @@
 #define LNG_EN "en"
 #define LNG_VI "vi"
 #define LNG_HE "he"
+#define LNG_SH "sh"
 
 using namespace std;
 SQLScraper::SQLScraper(const char* logfile)
@@ -58,6 +63,12 @@ size_t SQLScraper::createLinkmap(language lng)
             pHashmap = VI_HASHMAP_PATH;
             pLinkmap = VI_LINKMAP_PATH;
             fPath = VI_CATEGORYLINKS_PATH;
+            break;
+        case SH:
+            category_tag = SH_CATEGORY_TAG;
+            pHashmap = SH_HASHMAP_PATH;
+            pLinkmap = SH_LINKMAP_PATH;
+            fPath = SH_CATEGORYLINKS_PATH;
             break;
         default:
             category_tag = EN_CATEGORY_TAG;
@@ -192,6 +203,9 @@ void SQLScraper::writeLinkmap(vector<vector<int>>* linkmap, const char* path, la
             break;
         case VI:
             lngCode = LNG_VI;
+            break;
+        case SH:
+            lngCode = LNG_SH;
             break;
         default:
             lngCode = LNG_EN;

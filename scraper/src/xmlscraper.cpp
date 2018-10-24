@@ -28,6 +28,15 @@
 #define HE_AUTHOR_OUTPUT "../../media/hebrew/csvFiles/authors.csv"
 #define HE_AUTHORLINK_OUTPUT(x) "../../media/hebrew/csvFiles/authorLinks" + to_string(x) + ".csv"
 #define HE_BOTSET "../../media/hebrew/csvFiles/bots.csv"
+// path to files (serbo-croat)
+#define SH_INDEX_PATH "../../media/serbo-croat/index-pages.txt"
+#define SH_LINKMAP_PATH "../../media/serbo-croat/csvFiles/linkmap"
+#define SH_PAGES_PATH "../../media/serbo-croat/jsonFiles/pages"
+#define SH_HISTORY_INPUT "../../media/serbo-croat/rawFiles/shwiki-20181001-pages-meta-history.xml"
+#define SH_HISTORY_OUTPUT(x) "../../media/serbo-croat/csvFiles/history" + to_string(x) + ".csv"
+#define SH_AUTHOR_OUTPUT "../../media/serbo-croat/csvFiles/authors.csv"
+#define SH_AUTHORLINK_OUTPUT(x) "../../media/serbo-croat/csvFiles/authorLinks" + to_string(x) + ".csv"
+#define SH_BOTSET "../../media/serbo-croat/csvFiles/bots.csv"
 // approximate initial sizes for buffers
 #define TITLE_LENGTH 128
 #define PATH_LENGTH 256
@@ -58,7 +67,7 @@
 #define VI_MAINTENANCE 3116367
 #define VI_TRACKING 3155218
 #define VI_STUB 1439626
-#define VI_REDIRECT 40889
+#define VI_REDIRECT 40889 // (soft)
 #define VI_DISAMBIGUATION 2717
 // bad "category" ids (hebrew)
 #define HE_HIDDEN 504284
@@ -66,6 +75,14 @@
 #define HE_MAINTENANCE 31583
 #define HE_STUB 21182
 #define HE_DISAMBIGUATION 26446
+// "bad category" ids (serbo-croat)
+#define SH_HIDDEN 99698
+#define SH_TEMPLATE 27462
+#define SH_MAINTENANCE 46542
+#define SH_TRACKING 1401185
+#define SH_STUB 1868
+#define SH_REDIRECT 73339 // (soft)
+#define SH_DISAMBIGUATION 6732
 // tags
 #define PAGE_START "<page>"
 #define PAGE_END "</page>"
@@ -84,10 +101,12 @@
 #define EN_CATEGORY_TAG "Category:"
 #define VI_CATEGORY_TAG "Thể loại:"
 #define HE_CATEGORY_TAG "קטגוריה:"
+#define SH_CATEGORY_TAG "Kategorija:"
 // language codes
 #define LNG_EN "en"
 #define LNG_VI "vi"
 #define LNG_HE "he"
+#define LNG_SH "sh"
 
 using namespace std;
 XMLScraper::XMLScraper(const char* logfile)
@@ -130,6 +149,11 @@ size_t XMLScraper::scrapePages(language lng)
             path = HE_LINKMAP_PATH;
             fPath = HE_INDEX_PATH;
             break;
+        case SH:
+            category_tag = SH_CATEGORY_TAG;
+            path = SH_LINKMAP_PATH;
+            fPath = SH_INDEX_PATH;
+            break;
         default:
             category_tag = EN_CATEGORY_TAG;
             path = EN_LINKMAP_PATH;
@@ -162,6 +186,9 @@ size_t XMLScraper::scrapePages(language lng)
             break;
         case HE:
             path = HE_PAGES_PATH;
+            break;
+        case SH:
+            path = SH_PAGES_PATH;
             break;
         default:
             path = EN_PAGES_PATH;
@@ -270,6 +297,10 @@ bool XMLScraper::isArticle(vector<int>* categories, unordered_map<int,string>* l
                 disamb = HE_DISAMBIGUATION;
                 redir = -1; // no id known for redirects
                 break;
+            case SH:
+                disamb = SH_DISAMBIGUATION;
+                redir = SH_REDIRECT;
+                break;
             default:
                 disamb = EN_DISAMBIGUATION;
                 redir = EN_REDIRECT;
@@ -328,6 +359,14 @@ std::unordered_set<int>* XMLScraper::getNonTopicalCategories(std::unordered_map<
             nonTopCats->insert(HE_HIDDEN);
             nonTopCats->insert(HE_STUB);
             break;
+        case SH:
+            nonTopCats->insert(SH_MAINTENANCE);
+            nonTopCats->insert(SH_TEMPLATE);
+            nonTopCats->insert(SH_HIDDEN);
+            nonTopCats->insert(SH_TRACKING);
+            nonTopCats->insert(SH_REDIRECT);
+            nonTopCats->insert(SH_STUB);
+            break;
         default:
             nonTopCats->insert(EN_MAINTENANCE);
             nonTopCats->insert(EN_TEMPLATE);
@@ -378,6 +417,10 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
             path = HE_HISTORY_INPUT(fileNr);
             lngCode = LNG_HE;
             break;
+        case SH:
+            path = SH_HISTORY_INPUT;
+            lngCode = LNG_SH;
+            break;
         default:
             path = EN_HISTORY_INPUT(fileNr);
             lngCode = LNG_EN;
@@ -400,6 +443,10 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
         case HE:
             fPath = HE_HISTORY_OUTPUT(fileNr);
             pBotset = HE_BOTSET;
+            break;
+        case SH:
+            fPath = SH_HISTORY_OUTPUT(fileNr+fileCount);
+            pBotset = SH_BOTSET;
             break;
         default:
             fPath = EN_HISTORY_OUTPUT(fileNr);
@@ -565,6 +612,9 @@ size_t XMLScraper::historyToCSV(short fileNr, language lng)
                     case HE:
                         fPath = HE_HISTORY_OUTPUT(fileNr+fileCount-1);
                         break;
+                    case SH:
+                        fPath = SH_HISTORY_OUTPUT(fileNr+fileCount);
+                        break;
                     default:
                         fPath = EN_HISTORY_OUTPUT(fileNr);
                         break;
@@ -597,6 +647,10 @@ size_t XMLScraper::getAuthors(language lng)
             path = HE_AUTHOR_OUTPUT;
             fPath = HE_HISTORY_OUTPUT(fileNr);
             break;
+        case SH:
+            path = SH_AUTHOR_OUTPUT;
+            fPath = SH_HISTORY_OUTPUT(fileNr);
+            break;
         default:
             path = EN_AUTHOR_OUTPUT;
             fPath = EN_HISTORY_OUTPUT(fileNr);
@@ -619,6 +673,9 @@ size_t XMLScraper::getAuthors(language lng)
             case HE:
                 fPath = HE_HISTORY_OUTPUT(fileNr);
                 break;
+            case SH:
+                fPath = SH_HISTORY_OUTPUT(fileNr);
+                break;
             default:
                 fPath = EN_HISTORY_OUTPUT(fileNr);
                 break;
@@ -635,6 +692,9 @@ size_t XMLScraper::getAuthors(language lng)
                 break;
             case HE:
                 fPath = HE_HISTORY_OUTPUT(i);
+                break;
+            case SH:
+                fPath = SH_HISTORY_OUTPUT(i);
                 break;
             default:
                 fPath = EN_HISTORY_OUTPUT(i);
@@ -732,6 +792,52 @@ size_t XMLScraper::getAuthors(const char* fPath, const char* path)
     return count;
 }
 
+size_t XMLScraper::getPages(const char* fPath, const char* path)
+{
+    size_t count = 0;
+    FILE* ipFile;
+    ipFile = LoggingUtil::openFile(fPath, false);
+    if (!ipFile)
+    {
+        cerr << "Could not open file " << fPath << endl;
+        return 0;
+    }
+    cout << "Reading input file " << fPath << endl;
+    FILE* opFile = LoggingUtil::openFile(path, true);
+    if (!opFile)
+    {
+        cerr << "Could not create file " << path << endl;
+        return 0;
+    }
+    fputs("_key,title,namespace\n", opFile);
+    fclose(opFile);
+    unordered_map<size_t,string>* pages = new unordered_map<size_t,string>();
+
+    // get authors and save to map
+    while (parser.findPattern(ipFile, "Pages/"))
+    {
+        size_t pageId = stoi(parser.writeToString(ipFile, '\"'));
+        // go to beginning of page title
+        parser.findPattern(ipFile, "\"");
+        string pageTitle = parser.writeToString(ipFile, '\"');
+        auto it = pages->find(pageId);
+        if (it == pages->end())
+        {
+            // add page to set
+            pages->insert({pageId,pageTitle});
+            count++;
+        }
+    }
+    // print map
+    for (auto it = pages->begin(); it != pages->end(); it++)
+    {
+        opFile = fopen(path, "a");
+        fprintf(opFile, "\"%zu\",\"%s\",\"%s\"\n", it->first, it->second.c_str(), "0");
+        fclose(opFile);
+    }
+    return count;
+}
+
 size_t XMLScraper::getAuthorLinks(language lng)
 {
     string path, fPath, lngCode;
@@ -746,6 +852,10 @@ size_t XMLScraper::getAuthorLinks(language lng)
         case HE:
             path = HE_HISTORY_OUTPUT(fileNr);
             lngCode = LNG_HE;
+            break;
+        case SH:
+            path = SH_HISTORY_OUTPUT(fileNr);
+            lngCode = LNG_SH;
             break;
         default:
             path = EN_HISTORY_OUTPUT(fileNr);
@@ -765,6 +875,9 @@ size_t XMLScraper::getAuthorLinks(language lng)
             case HE:
                 path = HE_HISTORY_OUTPUT(fileNr);
                 break;
+            case SH:
+                path = SH_HISTORY_OUTPUT(fileNr);
+                break;
             default:
                 path = EN_HISTORY_OUTPUT(fileNr);
                 break;
@@ -780,6 +893,9 @@ size_t XMLScraper::getAuthorLinks(language lng)
                 break;
             case HE:
                 path = HE_HISTORY_OUTPUT(i);
+                break;
+            case SH:
+                path = SH_HISTORY_OUTPUT(i);
                 break;
             default:
                 path = EN_HISTORY_OUTPUT(i);
@@ -843,6 +959,9 @@ size_t XMLScraper::getAuthorLinks(language lng)
         case HE:
             fPath = HE_AUTHORLINK_OUTPUT(outputNr);
             break;
+        case SH:
+            fPath = SH_AUTHORLINK_OUTPUT(outputNr);
+            break;
         default:
             fPath = EN_AUTHORLINK_OUTPUT;
             break;
@@ -867,6 +986,9 @@ size_t XMLScraper::getAuthorLinks(language lng)
                     break;
                 case HE:
                     fPath = HE_AUTHORLINK_OUTPUT(outputNr);
+                    break;
+                case SH:
+                    fPath = SH_AUTHORLINK_OUTPUT(outputNr);
                     break;
                 default:
                     fPath = EN_AUTHORLINK_OUTPUT;

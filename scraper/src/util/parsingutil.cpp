@@ -747,3 +747,23 @@ vector<int>* ParsingUtil::writeCategoryToBuffer(unordered_map<int,string>::const
     return res;
 }
 
+unordered_map<size_t,size_t>* ParsingUtil::countPages(const char* path)
+{
+    FILE* pFile = LoggingUtil::openFile(path,"false");
+    if (!pFile)
+        return NULL;
+    unordered_map<size_t,size_t>* pageCounts = new unordered_map<size_t,size_t>();
+    while (this->findPattern(pFile,"Pages/"))
+    {
+        size_t id = stoi(this->writeToString(pFile,'\"'));
+        auto it = pageCounts->find(id);
+        if (it == pageCounts->end())
+            pageCounts->insert({id,1});
+        else
+            it->second++;
+    }
+    // print
+    for (auto it = pageCounts->begin(); it != pageCounts->end(); it++)
+        cout << it->first << " appears " << it->second << " times\n";
+    return pageCounts;
+}

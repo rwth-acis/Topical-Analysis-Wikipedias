@@ -55,6 +55,8 @@ public:
     std::unordered_set<std::string>* parseBotSet(const char* path);
     // function for reading categories to list from string
     std::vector<int>* writeCategoryToBuffer(std::unordered_map<int,std::string>::const_iterator categoryLinks);
+    // function listing the amount of appearences of pageIds in the given file
+    std::unordered_map<size_t,size_t>* countPages(const char* path);
 
     // static string compare function
     static bool reasonableStringCompare(std::string one, std::string two)
