@@ -792,6 +792,66 @@ size_t XMLScraper::getAuthors(const char* fPath, const char* path)
     return count;
 }
 
+size_t XMLScraper::getAuthorArticle(const char* fPath, const char* path)
+{
+    size_t count = 0;
+    unsigned short number = 1;
+    string fullPath = fPath + to_string(number) + ".csv";
+    FILE* ipFile;
+    ipFile = LoggingUtil::openFile(fullPath.c_str(), false);
+    if (!ipFile)
+    {
+        cerr << "Could not open file " << fullPath << endl;
+        return 0;
+    }
+    cout << "Reading input file " << fullPath << endl;
+    FILE* opFile = LoggingUtil::openFile(path, true);
+    if (!opFile)
+    {
+        cerr << "Could not create file " << path << endl;
+        return 0;
+    }
+    fputs("_to,_from,page_title,user_name\n", opFile);
+    fclose(opFile);
+    unordered_map<string,string>* edges = new unordered_map<string,string>();
+
+    while ((ipFile = fopen(fullPath.c_str(), "r"))) {
+      // get edges and save to map
+      while (parser.findPattern(ipFile, "Pages/"))
+      {
+          string pageId = parser.writeToString(ipFile, '\"');
+          parser.findPattern(ipFile, "\"");
+          string content = parser.writeToString(ipFile, '\"');
+          content += "\",\"";
+          if (!parser.findPattern(ipFile, "Authors/"))
+          {
+              LoggingUtil::warning("File " + string(fPath) + " ended unexpectedly");
+              continue;
+          }
+          string userId = parser.writeToString(ipFile, '\"');
+          string edge = pageId + "," + userId;
+          parser.findPattern(ipFile, "\"");
+          content += parser.writeToString(ipFile, '\"');
+          auto it = edges->find(edge);
+          if (it == edges->end())
+              // add edge to set
+              edges->insert({edge,content});
+          count++;
+      }
+      number++;
+      fullPath = fPath + to_string(number) + ".csv";
+    }
+    // print map
+    for (auto it = edges->begin(); it != edges->end(); it++)
+    {
+        opFile = fopen(path, "a");
+        vector<size_t> ids = ParsingUtil::stringToNumbers(it->first, ',');
+        fprintf(opFile, "\"%zu\",\"%zu\",\"%s\"\n", ids[0], ids[1], it->second.c_str());
+        fclose(opFile);
+    }
+    return count;
+}
+
 size_t XMLScraper::getPages(const char* fPath, const char* path)
 {
     size_t count = 0;

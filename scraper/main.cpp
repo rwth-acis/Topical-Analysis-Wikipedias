@@ -31,6 +31,7 @@ static struct option options[] = {
     {"author_network", no_argument, NULL, 'a'},
     {"authors_history", no_argument, NULL, 'u'},
     {"authors_file", no_argument, NULL, 'f'},
+    {"author_article", no_argument, NULL, 't'},
     {"pages", no_argument, NULL, 'p'},
     {"modularity", no_argument, NULL, 'm'},
     {"graph", no_argument, NULL, 'g'},
@@ -48,7 +49,7 @@ int main(int argc, char* argv[])
     char opt;
     string input;
     language lng = EN;
-    while ((opt = getopt_long(argc, argv, "hlsiy;c;aufpmgn", options, NULL)) != -1)
+    while ((opt = getopt_long(argc, argv, "hlsiy;c;auftpmgn", options, NULL)) != -1)
     switch(opt)
     {
         // change path to logfile
@@ -273,6 +274,25 @@ int main(int argc, char* argv[])
                 cin >> inputTwo;
             }
             scraper->getAuthors(input.c_str(), inputTwo.c_str());
+        }
+            break;
+        case 't':
+        {
+            input = "";
+            string inputTwo = "";
+            if (!scraper)
+                scraper = new XMLScraper(PARSING_LOGFILE, XML_LOGFILE);
+            while (input == "")
+            {
+                cout << "Heyho! Would you kindly tell me the source file path\n";
+                cin >> input;
+            }
+            while (inputTwo == "")
+            {
+                cout << "Yeah, that's what I'm talking about!\nAnd now please tell me the path of the output file\n";
+                cin >> inputTwo;
+            }
+            scraper->getAuthorArticle(input.c_str(), inputTwo.c_str());
         }
             break;
         case 'p':

@@ -40,6 +40,9 @@ public:
     // creates a CSV file from the given input file and writes the authors to the
     // given file
     size_t getAuthors(const char* ipFile, const char* opFile);
+    // creates a CSV file from the given input file and writes the edges to the
+    // given file
+    size_t getAuthorArticle(const char* ipFile, const char* opFile);
     // creates a CSV file from the given input file and writest the pages to it
     size_t getPages(const char* ipFile, const char* opFile);
     // creates two CSV file with entries corresponding to the actor network obtained

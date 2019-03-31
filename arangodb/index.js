@@ -37,8 +37,8 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
     var timestamp = Date(start).toString();
     var status = "running";
     var collectionName = lng + "CategoryLinks";
-    const categoryGraphName = lng + "Categories";
-    const categoryTreeName = lng + "CategoryTree";
+    const categoryGraphName = "Pages";
+    const categoryTreeName = "Categories";
     const categoryGraph = require("@arangodb/general-graph")._graph(categoryGraphName);
     const categoryTree = require("@arangodb/general-graph")._graph(categoryTreeName);
     const pathCollection = "pathLengths";
@@ -90,7 +90,6 @@ router.get('/getPathLengths/:language/:community', function(req,res) {
     db._query("for doc in serviceLogs filter doc._id == @id update doc with {'status':@status,'fin':@time,'pathQueries':@qc} in serviceLogs",{'id':logKey._id,'time':timestamp,'status':status,'qc':queryCount});
     res.send({"duration":fin-start});
 })
-
 // returns the average path lengths between pages worked on by the given set of communities
 router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,res) {
     // get language
@@ -107,8 +106,8 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
     const amount = parseInt(req.pathParams.amount);
     var timestamp = Date(start).toString();
     var status = "running";
-    const categoryGraphName = lng + "Categories";
-    const categoryTreeName = lng + "CategoryTree";
+    const categoryGraphName = "Pages";
+    const categoryTreeName = "Categories";
     const categoryGraph = require("@arangodb/general-graph")._graph(categoryGraphName);
     const categoryTree = require("@arangodb/general-graph")._graph(categoryTreeName);
     const pathCollection = "pathLengths";
@@ -193,6 +192,123 @@ router.get('/getPathLengtsRandomly/:language/:collection/:amount', function(req,
     res.send({"result":result,"duration":fin-start});
 })
 // returns the average path lengths between pages worked on by the given set of communities
+router.get('/getOverlappingPathLengths/:language/:amount/:iterations/', function(req,res) {
+    // get language
+    var lng, attr;
+    if (typeof (lng = req.pathParams.language) == "undefined")
+    {
+        res.send("Need to specify language");
+        return;
+    }
+    if (typeof req.pathParams.iterations == "undefined")
+    {
+        res.send("Need to specify number of iterations (10 or 100)");
+        return;
+    }
+    attr = "overlappingSLPA" + req.pathParams.iterations;
+    const start = time();
+    const amount = parseInt(req.pathParams.amount);
+    var timestamp = Date(start).toString();
+    var status = "running";
+    const collection = "overlappingSLPA" + req.pathParams.iterations;
+    const gm = require("@arangodb/general-graph");
+    var categoryGraphName = lng + "Categories";
+    var categoryTreeName = lng + "CategoryTree";
+    if (lng != "sh")
+    {
+        categoryGraphName = "Pages";
+        categoryTreeName = "Categories";
+    }
+    var categoryGraph = gm._graph(categoryGraphName);
+    var categoryTree = gm._graph(categoryTreeName);
+    const pathCollection = "pathLengths";
+    const logKey = db._collection("serviceLogs").save({"function":{"type":"getPathLengths","language":lng,"amount":amount},"start":timestamp,"pairsPassed":0,"status":status});
+    var pages = [];
+    pages = db._query("for doc in @@collection filter doc.namespace == '0' return doc",{'@collection':lng + "Pages"}).toArray();
+    // prepare community map
+    var commyMap = {};
+    for (var i = 0; i < pages.length; i++)
+    {
+        // parse communities
+        var commys = pages[i][attr];
+        if (typeof commys == "object")
+        {
+            for (var j = 0; j < commys.length; j++)
+            {
+                var commyId = commys[j][0];
+                if (typeof commyMap[commyId] == "undefined")
+                    commyMap[commyId] = [];
+                commyMap[commyId].push(pages[i]._id);
+            }
+        }
+        else
+        {
+            if (typeof commyMap[commys] == "undefined")
+                commyMap[commys] = [];
+            commyMap[commys].push(pages[i]._id);
+        }
+    }
+    var keys = Object.keys(commyMap);
+    pages = null;
+    // get communities with more than one page
+    var bigCommys = [];
+    for (var i = 0; i < keys.length; i++)
+        if (commyMap[keys[i]].length > 1)
+            bigCommys.push(keys[i]);
+    var shortest = 9999, sumShortest = 0, sumAvg = 0, count = 0;
+    for (let i = 0; i < amount; i++)
+    {
+        // update log entry
+        db._query("for doc in serviceLogs filter doc._id == @id update doc with {'pairsPassed':@count} in serviceLogs",{'id':logKey._id,'count':count});
+        // if status == canceled break loop
+        if (db._query("for doc in serviceLogs filter doc._id == @id return doc.status",{'id':logKey._id}).next() === "canceled")
+        {
+            status = "canceled";
+            break;
+        }
+        // get random community
+        let commyId = parseInt(Math.random()*bigCommys.length);
+        var community = commyMap[bigCommys[commyId]];
+        var commySize = community.length;
+        if (commySize < 2)
+        {
+            i--;
+            continue;
+        }
+        // get random pair of articles
+        let idA = parseInt(Math.random()*commySize);
+        var pageA = community[idA];
+        var idB = idA;
+        while (idA == idB)
+        {
+            // get any other article for arbitrary pairs
+            // if community size == 2 => pageB == other article
+            if (commySize == 2)
+                idB = 1 - idA;
+            else
+                idB = parseInt(Math.random()*commySize);
+            pageB = community[idB];
+        }
+        // get path length
+        let result = getCategoryPaths(pageA,pageB,categoryGraph,categoryTreeName,pathCollection,collection);
+        // if a path exists => save
+        if (result.count > 0)
+        {
+            count++;
+            shortest = (shortest < result.shortestPath) ? shortest : result.shortestPath;
+            sumShortest += result.shortestPath;
+            sumAvg += result.avgPath;
+        }
+    }
+    if (status !== "canceled");
+        status = "done";
+    let result = {'shortest_path':shortest,'average_shortest_path':sumShortest/count,'avgavg_shortestPath':sumAvg/count};
+    const fin = time();
+    timestamp = Date(fin).toString();
+    db._query("for doc in serviceLogs filter doc._id == @id update doc with {'shortestPaths':@result,'status':@status,'fin':@fin} in serviceLogs",{'id':logKey._id,'result':result,'status':status,'fin':timestamp});
+    res.send({"result":result,"duration":fin-start});
+})
+// returns the average path lengths between pages worked on by the given set of communities
 router.get('/getPathLengthsWithOffset/:language/:collection/:offset', function(req,res) {
     // get community
     if (typeof req.pathParams.language == "undefined")
@@ -260,28 +376,16 @@ router.get('/getPathLengthsWithOffset/:language/:collection/:offset', function(r
     res.send({"result":result,"duration":fin-start});
 })
 // returns article pages
-router.get('/getArticles/:language/:community', function(req,res) {
-    var lng,community;
+router.get('/getArticles/:language', function(req,res) {
+    var lng;
     // get author community IDs
     if (typeof (lng = req.pathParams.language) == "undefined")
     {
         res.send("Need to specify language");
         return
     }
-    if (typeof (community = req.pathParams.community) == "undefined")
-    {
-        res.send("Need to specify language");
-        return
-    }
-    // get communities
-    var commys = db._query("for doc in @@collection collect commy = doc.@community return commy",{'@collection':lng+'Authors','community':community}).toArray();
     // get pages
-    var result = [];
-    for (var i = 0; i < commys.length; i++)
-    {
-        var pages = db._query("for doc in @@collection filter doc.@community == @commy return {'id':doc._id,'community':doc.@community}",{'@collection':lng+'Pages','community':community,'commy':commys[i]}).next();
-        result.push(pages);
-    }
+    var result = db._query("for doc in @@collection filter doc.namespace == '0' return doc",{'@collection':lng+'Pages'}).toArray();
     res.send(result);
 })
 // returns the pages edited by authors within the communities specified by the given tag
@@ -428,6 +532,209 @@ router.get('/getCommunityDetails/:collection', function(req,res) {
     result.empty_community_count = result.empty_communities.length;
     result.zero_page_community_count = result.zero_page_communities.length;
     res.send(result);
+})
+router.get('/getOverlappingDetails/:language/:iterations', function(req,res) {
+    var lng, attr;
+    if (typeof (lng = req.pathParams.language) == "undefined")
+    {
+        res.send("Need to specify language");
+        return;
+    }
+    if (typeof req.pathParams.iterations == "undefined")
+    {
+        res.send("Need to specify number of iterations (10 or 100)");
+        return;
+    }
+    attr = "overlappingSLPA" + req.pathParams.iterations;
+    // make Commnity Map
+    var pages = db._query("for doc in @@collection filter doc.namespace == '0' return doc",{'@collection':lng + "Pages"}).toArray();
+    // prepare community map
+    var commyMap_articles = {};
+    for (var i = 0; i < pages.length; i++)
+    {
+        // parse communities
+        var commys = pages[i][attr];
+        if (typeof commys == "object")
+        {
+            for (var j = 0; j < commys.length; j++)
+            {
+                var commyId = commys[j][0];
+                if (typeof commyMap_articles[commyId] == "undefined")
+                    commyMap_articles[commyId] = [];
+                commyMap_articles[commyId].push(pages[i]._id);
+            }
+        }
+        else
+        {
+            if (typeof commyMap_articles[commys] == "undefined")
+                commyMap_articles[commys] = [];
+            commyMap_articles[commys].push(pages[i]);
+        }
+    }
+    var articleKeys = Object.keys(commyMap_articles);
+    var commyMap_authors = {};
+    var authors = db._query("for doc in @@collection return doc",{'@collection':lng + "Authors"}).toArray();
+    for (var i = 0; i < authors.length; i++)
+    {
+        // parse communities
+        var commys = authors[i][attr];
+        if (typeof commys == "object")
+        {
+            for (var j = 0; j < commys.length; j++)
+            {
+                var commyId = commys[j][0];
+                if (typeof commyMap_authors[commyId] == "undefined")
+                    commyMap_authors[commyId] = [];
+                commyMap_authors[commyId].push(authors[i]._id);
+            }
+        }
+        else
+        {
+            if (typeof commyMap_authors[commys] == "undefined")
+                commyMap_authors[commys] = [];
+            commyMap_authors[commys].push(authors[i]._id);
+        }
+    }
+    var authorKeys = Object.keys(commyMap_authors);
+    var details = {"article_communities":articleKeys.length,"author_communities":authorKeys.length};
+    var count = 0, sum = 0, max = [], amount = articleKeys.length, sizeMap = {};
+    for (var i = 0; i < amount; i++)
+    {
+        var size = commyMap_articles[articleKeys[i]].length;
+        sum += size;
+        if (size < 2)
+            count++;
+        if (typeof sizeMap[size] == "undefined")
+            sizeMap[size] = [];
+        sizeMap[size].push(articleKeys[i]);
+    }
+    details["single_article_communities"] = count;
+    details["average_article_communities"] = sum/amount;
+    var sizeKeys = Object.keys(sizeMap);
+    for (var i = 0; i < 10; i++)
+    {
+        var commySize = sizeKeys[sizeKeys.length-(i+1)];
+        var commyIds = sizeMap[commySize];
+        var authors = [];
+        for (var j = 0; j < commyIds.length; j++)
+            if (typeof commyMap_authors[commyIds[j]] != "undefined")
+                authors.push(commyMap_authors[commyIds[j]].length);
+        max[i] = {"id":commyIds,"articles":commySize,"authors":authors};
+    }
+    details["max_article_communities"] = max;
+    amount = authorKeys.length;
+    count = 0;
+    max = [];
+    sizeMap = {};
+    sum = 0;
+    for (var i = 0; i < amount; i++)
+    {
+        var size = commyMap_authors[authorKeys[i]].length;
+        sum += size;
+        if (size < 2)
+            count++;
+        if (typeof sizeMap[size] == "undefined")
+            sizeMap[size] = [];
+        sizeMap[size].push(authorKeys[i]);
+    }
+    details["single_authors_communities"] = count;
+    details["average_authors_communities"] = sum/amount;
+    sizeKeys = Object.keys(sizeMap);
+    for (var i = 0; i < 10; i++)
+    {
+        var commySize = sizeKeys[sizeKeys.length-(i+1)];
+        var commyIds = sizeMap[commySize];
+        var articles = [];
+        for (var j = 0; j < commyIds.length; j++)
+            if (typeof commyMap_articles[commyIds[j]] != "undefined")
+                articles.push(commyMap_articles[commyIds[j]].length);
+        max[i] = {"id":commyIds,"authors":commySize,"articles":articles};
+    }
+    details["max_author_communities"] = max;
+    res.send(details);
+})
+router.get('/getCentralCategories/:language/:communityId/:communityKey', function(req,res) {
+    var lng, commyId, attr;
+    if (typeof (lng = req.pathParams.language) == "undefined")
+    {
+        res.send("Specify language");
+        return;
+    }
+    if (typeof (commyId = req.pathParams.communityId) == "undefined")
+    {
+        res.send("Specify community");
+        return;
+    }
+    if (typeof (attr = req.pathParams.communityKey) == "undefined")
+    {
+        res.send("Specify community key");
+        return;
+    }
+    var graphName = "Pages";
+    if (lng == "sh")
+        graphName = "shCategories";
+    const graph = require("@arangodb/general-graph")._graph(graphName);
+    // get community
+    var community = [];
+    let pages = db._query("for doc in @@collection filter doc.namespace == '0' return doc",{'@collection':lng + "Pages"}).toArray();
+    for (var i = 0; i < pages.length; i++)
+    {
+        let commys = pages[i][attr];
+        if (typeof commys == "object")
+        {
+            for (var j = 0; j < commys.length; j++)
+                if (commys[j][0] == commyId)
+                    community.push(pages[i]._id);
+        }
+        else
+            if (commys == commyId)
+                community.push(pages[i]._id);
+        commys = null;
+    }
+    pages = null;
+    categories = {};
+    for (var i = 0; i < community.length; i++)
+    {
+        let cats = graph._neighbors(community[i]);
+        for (var j = 0; j < cats.length; j++)
+        {
+            if (cats[j] != null)
+            {
+                if (typeof categories[cats[j]] == "undefined")
+                    categories[cats[j]] = 1;
+                else
+                    categories[cats[j]] += 1;
+            }
+        }
+        cats = null;
+    }
+    catKeys = Object.keys(categories);
+    first = catKeys[0];
+    second = catKeys[1];
+    third = catKeys[2];
+    for (var i = 3; i < catKeys.length; i++)
+    {
+        if (typeof catKeys[i] != "string")
+            continue;
+        if (categories[catKeys[i]] > categories[first])
+        {
+            third = second;
+            second = first;
+            first = catKeys[i];
+        }
+        else if (categories[catKeys[i]] > categories[second])
+        {
+            third = second;
+            second = catKeys[i];
+        }
+        else if (categories[catKeys[i]] > categories[third])
+            third = catKeys[i];
+    }
+    maxCats = {};
+    maxCats[first] = categories[first];
+    maxCats[second] = categories[second];
+    maxCats[third] = categories[third];
+    res.send(maxCats);
 })
 // returns minimal, maximal and average community size
 router.get('/getCommunities/:collection/:community', function(req,res) {
