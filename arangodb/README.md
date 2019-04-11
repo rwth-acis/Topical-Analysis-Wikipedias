@@ -1,6 +1,6 @@
 # wikipics
 
-An again rather specific service that can be uploaded to a ArangoDB in order to retrieve community related data. For this it is important to stick to the naming conventions introduced in our paper. The result of running SLPA with `[i]` iterations has to be stored in the result field `slpa[i]`. If overlapping community detection is used, the naming convention is `overlappingSLPA[i]`.
+An again rather specific service that can be uploaded to an ArangoDB in order to retrieve community related data. For this it is important to stick to the naming conventions introduced in our paper. The result of running SLPA with `[i]` iterations on the directed history network for example has to be stored in the result field `slpaH[i]`. If overlapping community detection is used, the naming convention is `overlappingSLPA[i]`. In this case it is assumed that the underlying network structure is the undirected history network.
 
 # License
 
