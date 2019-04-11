@@ -596,20 +596,25 @@ router.get('/getOverlappingDetails/:language/:iterations', function(req,res) {
         }
     }
     var authorKeys = Object.keys(commyMap_authors);
-    var details = {"article_communities":articleKeys.length,"author_communities":authorKeys.length};
-    var count = 0, sum = 0, max = [], amount = articleKeys.length, sizeMap = {};
+    var details = {"article_communities":articleKeys.length};
+    var count = 0, sum = 0, max = [], amount = articleKeys.length, sizeMap = {}, authorCount = 0;
     for (var i = 0; i < amount; i++)
     {
-        var size = commyMap_articles[articleKeys[i]].length;
+        let key = articleKeys[i];
+        let size = commyMap_articles[key].length;
         sum += size;
         if (size < 2)
             count++;
         if (typeof sizeMap[size] == "undefined")
             sizeMap[size] = [];
         sizeMap[size].push(articleKeys[i]);
+        let authors = commyMap_authors[key];
+        if (typeof authors != "undefined")
+            authorCount += authors.length;
     }
     details["single_article_communities"] = count;
     details["average_article_communities"] = sum/amount;
+    details["average_author_count"] = authorCount/amount;
     var sizeKeys = Object.keys(sizeMap);
     for (var i = 0; i < 10; i++)
     {
@@ -627,18 +632,25 @@ router.get('/getOverlappingDetails/:language/:iterations', function(req,res) {
     max = [];
     sizeMap = {};
     sum = 0;
+    var articleCount = 0;
     for (var i = 0; i < amount; i++)
     {
-        var size = commyMap_authors[authorKeys[i]].length;
+        let key = authorKeys[i];
+        var size = commyMap_authors[key].length;
         sum += size;
         if (size < 2)
             count++;
         if (typeof sizeMap[size] == "undefined")
             sizeMap[size] = [];
         sizeMap[size].push(authorKeys[i]);
+        let articles = commyMap_articles[key];
+        if (typeof articles != "undefined")
+            articleCount += articles.length;
     }
+    details["author_communities"] = authorKeys.length;
     details["single_authors_communities"] = count;
     details["average_authors_communities"] = sum/amount;
+    details["average_article_count"] = articleCount/amount;
     sizeKeys = Object.keys(sizeMap);
     for (var i = 0; i < 10; i++)
     {
