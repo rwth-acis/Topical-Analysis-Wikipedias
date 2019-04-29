@@ -84,6 +84,7 @@ Graph::Graph(string collection)
     vertices = new unordered_set<string>();
     edges = new unordered_set<string>();
     degrees = new unordered_map<string,size_t>();
+    inDegrees = new unordered_map<string,size_t>();
     communities = new unordered_map<string,size_t>();
     unordered_set<size_t>* allCommys = new unordered_set<size_t>();
 
@@ -144,7 +145,7 @@ Graph::Graph(string collection)
         cerr << "No matching collection found!\n";
         return;
     }
-    // laod authors
+    // load authors
     string ipFilePath;
     cout << "Please insert path to author file\n";
     cin >> ipFilePath;
@@ -157,6 +158,8 @@ Graph::Graph(string collection)
         string id = AUTHOR_PATTERN + key;
         vertices->insert(id);
         degrees->insert({id,0});
+        if (directed)
+          inDegrees->insert({id,0});
         parser.findPattern(ipFile, communityPattern);
         size_t community = stoi(parser.writeToString(ipFile, ','));
         communities->insert({id,community});
@@ -218,23 +221,56 @@ Graph::Graph(string collection)
     cout << "Please insert path to pages file\n";
     cin >> ipFilePath;
     ipFile = LoggingUtil::openFile(ipFilePath, false);
-    while (parser.findPattern(ipFile, PAGES_PATTERN))
+    // if given file name matches collection name, parse pages from community files
+    if (ipFilePath.substr(ipFilePath.size() - (collection.size() + string(".json").size()), collection.size()) == ParsingUtil::decapitalize(collection))
     {
-        // get page id
-        string key = parser.writeToString(ipFile, '\"');
-        string id = PAGES_PATTERN + key;
-        // get community
-        parser.findPattern(ipFile, communityPattern);
-        size_t community = stoi(parser.writeToString(ipFile, {',','}'}));
-        // skip community if no author is part of it
-        if (allCommys->find(community) == allCommys->end())
-            continue;
-        // add vertex
-        if (vertices->find(id) == vertices->end())
+        while (parser.findPattern(ipFile, KEY_PATTERN))
         {
-            vertices->insert(id);
-            communities->insert({id,community});
-            degrees->insert({id,0});
+            // get community
+            size_t community = stoi(parser.writeToString(ipFile, {',','}','\"'}));
+            // skip community if no author is part of it
+            if (allCommys->find(community) == allCommys->end())
+                continue;
+            // get page ids
+            bool more = true;
+            while (more)
+            {
+              parser.findPattern(ipFile, PAGES_PATTERN);
+              string key = parser.writeToString(ipFile, '\"');
+              string id = PAGES_PATTERN + key;
+              // add vertex
+              if (vertices->find(id) == vertices->end())
+              {
+                  vertices->insert(id);
+                  communities->insert({id,community});
+                  degrees->insert({id,0});
+                  inDegrees->insert({id,0});
+              }
+              if (fgetc(ipFile) != ',')
+                more = false;
+            }
+        }
+    }
+    else
+    {
+        while (parser.findPattern(ipFile, PAGES_PATTERN))
+        {
+            // get page id
+            string key = parser.writeToString(ipFile, '\"');
+            string id = PAGES_PATTERN + key;
+            // get community
+            parser.findPattern(ipFile, communityPattern);
+            size_t community = stoi(parser.writeToString(ipFile, {',','}'}));
+            // skip community if no author is part of it
+            if (allCommys->find(community) == allCommys->end())
+                continue;
+            // add vertex
+            if (vertices->find(id) == vertices->end())
+            {
+                vertices->insert(id);
+                communities->insert({id,community});
+                degrees->insert({id,0});
+            }
         }
     }
     // load edges
@@ -275,7 +311,13 @@ Graph::Graph(string collection)
             auto it = degrees->find(fromVertex);
             if (it != degrees->end())
                 it->second++;
-            if (!directed)
+            if (directed)
+            {
+                it = inDegrees->find(toVertex);
+                if (it != inDegrees->end())
+                    it->second++;
+            }
+            else
             {
                 edges->insert(toVertex+fromVertex);
                 it = degrees->find(toVertex);
@@ -321,8 +363,18 @@ double Graph::getModularity()
             // get entry of adjacency matrix
             bool a = (edges->find((*it) + (*jt)) != edges->end());
             // get minuend
-            double frac = degrees->find(*it)->second * degrees->find(*jt)->second / (2 * degree);
-            sum += (a - frac);
+            double frac = 0;
+            if (directed)
+            {
+              frac = (double) a / degree;
+              double p = degrees->find(*it)->second * inDegrees->find(*jt)->second / (degree * degree);
+              sum += frac - p;
+            }
+            else
+            {
+              frac = degrees->find(*it)->second * degrees->find(*jt)->second / (2 * degree);
+              sum += ((double) a - frac);
+            }
         }
         count++;
         // progress indicator
@@ -332,6 +384,10 @@ double Graph::getModularity()
             progress++;
         }
     }
-    cout << "Modularity: " << (sum / degree) << endl;
-    return (sum / degree);
+    if (directed)
+      modularity = sum;
+    else
+      modularity = sum / degree;
+    cout << "Modularity: " << modularity << endl;
+    return modularity;
 }

@@ -14,8 +14,9 @@ class Graph
 	bool history, directed;
 	size_t degree;
 	unordered_set<string>* vertices;
-        unordered_set<string>* edges;
+    unordered_set<string>* edges;
 	unordered_map<string,size_t>* degrees;
+    unordered_map<string,size_t>* inDegrees;
 	unordered_map<string,size_t>* communities;
 	ParsingUtil parser;
 	double modularity = 42;

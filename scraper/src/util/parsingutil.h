@@ -182,6 +182,22 @@ public:
         res.push_back(item);
         return res;
     }
+    // return given string with all upper case letters
+    static std::string capitalize(std::string str)
+    {
+        std::string res = "";
+        for (unsigned short i = 0; i < str.size(); i++)
+            res += std::toupper(str[i]);
+        return res;
+    }
+    // return given string with all lower case letters
+    static std::string decapitalize(std::string str)
+    {
+        std::string res = "";
+        for (unsigned short i = 0; i < str.size(); i++)
+            res += std::tolower(str[i]);
+        return res;
+    }
 };
 
 #endif // PARSINGUTIL_H
